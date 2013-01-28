@@ -1,0 +1,2 @@
+#!/bin/sh
+zip addon.zip `ls|grep -v pack` -rq && mv addon.zip ../misc.xpi
