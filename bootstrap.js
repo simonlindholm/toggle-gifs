@@ -1,3 +1,4 @@
+// WTFPL
 
 var Cu = Components.utils;
 var Ci = Components.interfaces;
