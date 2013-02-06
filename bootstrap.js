@@ -6,12 +6,20 @@ var Ci = Components.interfaces;
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
 
-var toggleGIF = function(win) {
-	var domWindowUtils = win.QueryInterface(Components.interfaces.nsIInterfaceRequestor)
-		.getInterface(Components.interfaces.nsIDOMWindowUtils);
+var toggleGIF = function(topWin) {
+	var iterateFrames = function(win, callback) {
+		callback(win);
+		if (win.frames && win.frames.length) {
+			for (var i = 0; i < win.frames.length; ++i)
+				iterateFrames(win.frames[i], callback);
+		}
+	};
 
-	var animMode = domWindowUtils.imageAnimationMode;
-	domWindowUtils.imageAnimationMode = (animMode === 1 ? 0 : 1);
+	iterateFrames(topWin, function(win) {
+		var dwu = win.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+		var animMode = dwu.imageAnimationMode;
+		dwu.imageAnimationMode = (animMode === 1 ? 0 : 1);
+	});
 };
 
 var unloaders = [];
