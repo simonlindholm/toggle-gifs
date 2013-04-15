@@ -1,0 +1,11 @@
+
+For control over individual images:
+
+if (el instanceof Components.interfaces.nsIImageLoadingContent) {
+	var ic = el.getRequest(Ci.nsIImageLoadingContent.CURRENT_REQUEST).image;
+	ic.animated;
+	ic.resetAnimation();
+	ic.animationMode = 0 | 1;
+}
+
+... except background images... :(
