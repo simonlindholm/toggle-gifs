@@ -59,7 +59,7 @@ function startup(aData, aReason) {
 
 			let key = doc.createElement("key");
 			key.setAttribute("key", "M");
-			key.setAttribute("modifiers", "accel");
+			key.setAttribute("modifiers", "control");
 			key.setAttribute("oncommand", "window.sstogglegif_toggleGIF(content);");
 			doc.getElementById("mainKeyset").appendChild(keyset).appendChild(key);
 
