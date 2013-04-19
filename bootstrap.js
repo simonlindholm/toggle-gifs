@@ -6,19 +6,41 @@ var Ci = Components.interfaces;
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
 
-var toggleGIF = function(topWin) {
-	var iterateFrames = function(win, callback) {
-		callback(win);
-		if (win.frames && win.frames.length) {
-			for (var i = 0; i < win.frames.length; ++i)
-				iterateFrames(win.frames[i], callback);
-		}
-	};
+var iterateFrames = function(win, callback) {
+	callback(win);
+	if (win.frames && win.frames.length) {
+		for (var i = 0; i < win.frames.length; ++i)
+			iterateFrames(win.frames[i], callback);
+	}
+};
 
+var toggleGIF = function(topWin) {
 	iterateFrames(topWin, function(win) {
 		var dwu = win.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
 		var animMode = dwu.imageAnimationMode;
 		dwu.imageAnimationMode = (animMode === 1 ? 0 : 1);
+	});
+};
+
+var resetGIF = function(topWin) {
+	iterateFrames(topWin, function(win) {
+		var els = win.document.getElementsByTagName("img"), len = els.length;
+		for (var i = 0; i < len; ++i) {
+			try {
+				var el = els[i];
+				if (el instanceof Components.interfaces.nsIImageLoadingContent) {
+					var ic = el.getRequest(Ci.nsIImageLoadingContent.CURRENT_REQUEST).image;
+					if (ic.animated) {
+						var origMode = ic.animationMode;
+						if (origMode) ic.animationMode = 0;
+						ic.resetAnimation();
+						if (origMode) ic.animationMode = origMode;
+					}
+				}
+			} catch (e) {
+				// it's probably not loaded
+			}
+		}
 	});
 };
 
@@ -30,15 +52,21 @@ function startup(aData, aReason) {
 		try {
 			let doc = window.document;
 			window.sstogglegif_toggleGIF = toggleGIF;
+			window.sstogglegif_resetGIF = resetGIF;
 
 			let keyset = doc.createElement("keyset");
 			keyset.id = "ss-toggle-gif-keyset";
 
 			let key = doc.createElement("key");
-			key.id = "ss-toggle-gif-key";
 			key.setAttribute("key", "M");
 			key.setAttribute("modifiers", "accel");
 			key.setAttribute("oncommand", "window.sstogglegif_toggleGIF(content);");
+			doc.getElementById("mainKeyset").appendChild(keyset).appendChild(key);
+
+			key = doc.createElement("key");
+			key.setAttribute("key", "M");
+			key.setAttribute("modifiers", "shift");
+			key.setAttribute("oncommand", "window.sstogglegif_resetGIF(content);");
 			doc.getElementById("mainKeyset").appendChild(keyset).appendChild(key);
 		}
 		catch(ex) {}
@@ -50,6 +78,7 @@ function startup(aData, aReason) {
 			if (keyset)
 				keyset.parentNode.removeChild(keyset);
 			delete window.sstogglegif_toggleGIF;
+			delete window.sstogglegif_resetGIF;
 		}
 		catch(ex) {}
 	});
