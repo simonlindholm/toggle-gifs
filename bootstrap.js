@@ -17,18 +17,24 @@ var iterateFrames = function(win, callback) {
 var toggleGIF = function(topWin) {
 	iterateFrames(topWin, function(win) {
 		var dwu = win.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
-		var animMode = dwu.imageAnimationMode;
-		dwu.imageAnimationMode = (animMode === 1 ? 0 : 1);
+		try {
+			var animMode = dwu.imageAnimationMode;
+			dwu.imageAnimationMode = (animMode === 1 ? 0 : 1);
+		} catch (e) {
+			// Some invisible iframes don't have presContexts, which breaks
+			// the imageAnimationMode getter.
+		}
 	});
 };
 
 var resetGIF = function(topWin) {
 	iterateFrames(topWin, function(win) {
+		// (Unfortunately this doesn't reach non-<img>s, but I don't see a way around that.)
 		var els = win.document.getElementsByTagName("img"), len = els.length;
 		for (var i = 0; i < len; ++i) {
 			try {
 				var el = els[i];
-				if (el instanceof Components.interfaces.nsIImageLoadingContent) {
+				if (el instanceof Ci.nsIImageLoadingContent) {
 					var ic = el.getRequest(Ci.nsIImageLoadingContent.CURRENT_REQUEST).image;
 					if (ic.animated) {
 						var origMode = ic.animationMode;
@@ -38,7 +44,7 @@ var resetGIF = function(topWin) {
 					}
 				}
 			} catch (e) {
-				// it's probably not loaded
+				// It's probably not loaded.
 			}
 		}
 	});
