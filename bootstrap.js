@@ -6,15 +6,15 @@ var Ci = Components.interfaces;
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 Cu.import("resource://gre/modules/Services.jsm");
 
-var iterateFrames = function(win, callback) {
+function iterateFrames(win, callback) {
 	callback(win);
 	if (win.frames && win.frames.length) {
 		for (var i = 0; i < win.frames.length; ++i)
 			iterateFrames(win.frames[i], callback);
 	}
-};
+}
 
-var toggleGIF = function(topWin) {
+function toggleGIF(topWin) {
 	iterateFrames(topWin, function(win) {
 		var dwu = win.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
 		try {
@@ -25,9 +25,9 @@ var toggleGIF = function(topWin) {
 			// the imageAnimationMode getter.
 		}
 	});
-};
+}
 
-var resetGIF = function(topWin) {
+function resetGIF(topWin) {
 	iterateFrames(topWin, function(win) {
 		// (Unfortunately this doesn't reach non-<img>s, but I don't see a way around that.)
 		var els = win.document.getElementsByTagName("img"), len = els.length;
@@ -48,43 +48,41 @@ var resetGIF = function(topWin) {
 			}
 		}
 	});
-};
+}
 
+var registeredListeners = new WeakMap();
 var unloaders = [];
 
 function startup(aData, aReason) {
-	// Install the new shortcut in all browser windows, current and future
+	// Install the new shortcut in all browser windows, current and future.
 	watchWindows(function togglegif_load(window) {
 		try {
-			let doc = window.document;
-			window.sstogglegif_toggleGIF = toggleGIF;
-			window.sstogglegif_resetGIF = resetGIF;
+			var listener = function(ev) {
+				if (ev.defaultPrevented || ev.altKey)
+					return;
+				if (ev.which === 77) { // M
+					var targetWin = window.content;
+					if (ev.shiftKey && !ev.ctrlKey) {
+						resetGIF(targetWin);
+					}
+					else if (ev.ctrlKey && !ev.shiftKey) {
+						toggleGIF(targetWin);
+						ev.stopPropagation();
+						ev.preventDefault();
+					}
+				}
+			};
 
-			let keyset = doc.createElement("keyset");
-			keyset.id = "ss-toggle-gif-keyset";
-
-			let key = doc.createElement("key");
-			key.setAttribute("key", "M");
-			key.setAttribute("modifiers", "control");
-			key.setAttribute("oncommand", "window.sstogglegif_toggleGIF(content);");
-			doc.getElementById("mainKeyset").appendChild(keyset).appendChild(key);
-
-			key = doc.createElement("key");
-			key.setAttribute("key", "M");
-			key.setAttribute("modifiers", "shift");
-			key.setAttribute("oncommand", "window.sstogglegif_resetGIF(content);");
-			doc.getElementById("mainKeyset").appendChild(keyset).appendChild(key);
+			registeredListeners.set(window, listener);
+			window.addEventListener('keydown', listener);
 		}
 		catch(ex) {}
 	},
 	function togglegif_unload(window) {
 		try {
-			let doc = window.document;
-			let keyset = doc.getElementById("ss-toggle-gif-keyset");
-			if (keyset)
-				keyset.parentNode.removeChild(keyset);
-			delete window.sstogglegif_toggleGIF;
-			delete window.sstogglegif_resetGIF;
+			var listener = registeredListeners.get(window);
+			if (listener)
+				window.removeEventListener('keydown', listener);
 		}
 		catch(ex) {}
 	});

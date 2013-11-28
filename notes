@@ -9,3 +9,5 @@ if (el instanceof Components.interfaces.nsIImageLoadingContent) {
 }
 
 ... except background images... :(
+
+Australis is enabled if ("gCustomizeMode" in window).
