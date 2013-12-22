@@ -4,14 +4,13 @@ var Cc = Components.classes;
 var Cu = Components.utils;
 var Ci = Components.interfaces;
 
-Cu.import("resource://gre/modules/XPCOMUtils.jsm");
-Cu.import("resource://gre/modules/Services.jsm");
+var {XPCOMUtils} = Cu.import("resource://gre/modules/XPCOMUtils.jsm", {});
+var {Services} = Cu.import("resource://gre/modules/Services.jsm", {});
 
 var Prefs = {};
 
-function log(msg) {
-	Cu.reportError(msg);
-}
+// for debugging
+function log(msg) { Cu.reportError(msg); } void(log);
 
 function getIc(el) {
 	if (el instanceof Ci.nsIImageLoadingContent)
@@ -20,7 +19,8 @@ function getIc(el) {
 }
 
 function getDwu(win) {
-	return win.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+	return win.QueryInterface(Ci.nsIInterfaceRequestor)
+		.getInterface(Ci.nsIDOMWindowUtils);
 }
 
 function iterateFrames(win, callback) {
@@ -41,9 +41,9 @@ function toggleGifsInWindow(win) {
 	}
 }
 
-function setGifStateForWindow(win, animated) {
+function setGifStateForWindow(win, playing) {
 	// Like above.
-	try { getDwu(win).imageAnimationMode = animated ? 0 : 1; } catch (ex) {}
+	try { getDwu(win).imageAnimationMode = playing ? 0 : 1; } catch (ex) {}
 }
 
 function resetImageAnimation(el) {
@@ -62,55 +62,60 @@ function resetGifsInWindow(win) {
 	for (var i = 0; i < len; ++i) {
 		try {
 			resetImageAnimation(els[i]);
-		} catch (ex) {
-			// It's probably not loaded.
-		}
+		} catch (ex) {} // not loaded
 	}
 }
 
-var registeredListeners = new WeakMap();
+var registeredKeyListeners = new WeakMap();
+function addKeyListener(win) {
+	var listener = function(ev) {
+		if (ev.defaultPrevented || ev.altKey)
+			return;
+		if (ev.which === 77) { // M
+			var targetWin = win.content;
+			if (ev.shiftKey && !ev.ctrlKey) {
+				iterateFrames(targetWin, resetGifsInWindow);
+			}
+			else if (ev.ctrlKey && !ev.shiftKey) {
+				iterateFrames(targetWin, toggleGifsInWindow);
+				ev.stopPropagation();
+				ev.preventDefault();
+			}
+		}
+	};
+
+	registeredKeyListeners.set(win, listener);
+	win.addEventListener("keydown", listener);
+}
+function removeKeyListener(win) {
+	var listener = registeredKeyListeners.get(win);
+	if (listener)
+		win.removeEventListener("keydown", listener);
+}
+
 var unloaders = [];
 
 function startup(aData, aReason) {
 	initPrefs();
 
 	// Hook into all browser windows, current and future.
-	watchWindows(function togglegif_load(window) {
+	watchWindows(function togglegif_load(win) {
 		try {
-			var listener = function(ev) {
-				if (ev.defaultPrevented || ev.altKey)
-					return;
-				if (ev.which === 77) { // M
-					var targetWin = window.content;
-					if (ev.shiftKey && !ev.ctrlKey) {
-						iterateFrames(targetWin, resetGifsInWindow);
-					}
-					else if (ev.ctrlKey && !ev.shiftKey) {
-						iterateFrames(targetWin, toggleGifsInWindow);
-						ev.stopPropagation();
-						ev.preventDefault();
-					}
-				}
-			};
-
-			registeredListeners.set(window, listener);
-			window.addEventListener("keydown", listener);
+			addKeyListener(win);
 		} catch(ex) {}
 	},
-	function togglegif_unload(window) {
+	function togglegif_unload(win) {
 		try {
-			var listener = registeredListeners.get(window);
-			if (listener)
-				window.removeEventListener("keydown", listener);
+			removeKeyListener(win);
 		} catch(ex) {}
 	},
-	function togglegif_content_load(window) {
+	function togglegif_content_load(win) {
 		if (Prefs.defaultPaused)
-			setGifStateForWindow(window, false);
+			setGifStateForWindow(win, false);
 	},
-	function togglegif_content_unload(window) {
+	function togglegif_content_unload(win) {
 		var initialState = Services.prefs.getCharPref("image.animation_mode");
-		setGifStateForWindow(window, initialState === "normal");
+		setGifStateForWindow(win, initialState === "normal");
 	});
 }
 
@@ -130,31 +135,33 @@ function install(aData, aReason) { }
 function uninstall(aData, aReason) { }
 
 
-function watchWindows(callback, uncallback, contentCallback, contentUncallback) {
-	function forAllLoaded(f, contf) {
-		var enumerator = Services.wm.getEnumerator("navigator:browser");
-		while (enumerator.hasMoreElements()) {
-			var w = enumerator.getNext();
-			f(w);
-			var gBrowser = w.gBrowser;
-			for (var i = 0, len = gBrowser.browsers.length; i < len; ++i) {
-				var b = gBrowser.getBrowserAtIndex(i);
-				var w = b.contentWindow;
-				iterateFrames(w, contf);
-			}
+function forAllWindows(callback, contentCallback) {
+	var enumerator = Services.wm.getEnumerator("navigator:browser");
+	while (enumerator.hasMoreElements()) {
+		var w = enumerator.getNext();
+		if (callback)
+			callback(w);
+		if (!contentCallback)
+			continue;
+		var gBrowser = w.gBrowser;
+		for (var i = 0, len = gBrowser.browsers.length; i < len; ++i) {
+			var b = gBrowser.getBrowserAtIndex(i);
+			iterateFrames(b.contentWindow, contentCallback);
 		}
 	}
+}
 
-	forAllLoaded(callback, contentCallback);
+function watchWindows(callback, uncallback, contentCallback, contentUncallback) {
+	forAllWindows(callback, contentCallback);
 	unloaders.push(function() {
-		forAllLoaded(uncallback, contentUncallback);
+		forAllWindows(uncallback, contentUncallback);
 	});
 
 	var windowWatcher = {
 		QueryInterface: XPCOMUtils.generateQI([Ci.nsIObserver]),
 		observe: function windowWatcherObserve(win, topic, data) {
 			if (topic === "chrome-document-global-created") {
-				win.addEventListener("load", function onLoad(evt) {
+				win.addEventListener("load", function onLoad() {
 					win.removeEventListener("load", onLoad, false);
 					if (win.document.documentElement.getAttribute("windowtype") == "navigator:browser")
 						callback(win);
