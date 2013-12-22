@@ -1,0 +1,4 @@
+<?xml version="1.0"?>
+<vbox xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
+	<setting type="bool" pref="extensions.togglegifs.defaultPaused" title="Pause GIFs per default" />
+</vbox>
