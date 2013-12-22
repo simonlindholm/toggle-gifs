@@ -14,40 +14,43 @@ function iterateFrames(win, callback) {
 	}
 }
 
-function toggleGIF(topWin) {
-	iterateFrames(topWin, function(win) {
-		var dwu = win.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
-		try {
-			var animMode = dwu.imageAnimationMode;
-			dwu.imageAnimationMode = (animMode === 1 ? 0 : 1);
-		} catch (e) {
-			// Some invisible iframes don't have presContexts, which breaks
-			// the imageAnimationMode getter.
-		}
-	});
+function toggleGifsInWindow(win) {
+	var dwu = win.QueryInterface(Ci.nsIInterfaceRequestor).getInterface(Ci.nsIDOMWindowUtils);
+	try {
+		var animMode = dwu.imageAnimationMode;
+		dwu.imageAnimationMode = (animMode === 1 ? 0 : 1);
+	} catch (e) {
+		// Some invisible iframes don't have presContexts, which breaks
+		// the imageAnimationMode getter.
+	}
 }
 
-function resetGIF(topWin) {
-	iterateFrames(topWin, function(win) {
-		// (Unfortunately this doesn't reach non-<img>s, but I don't see a way around that.)
-		var els = win.document.getElementsByTagName("img"), len = els.length;
-		for (var i = 0; i < len; ++i) {
-			try {
-				var el = els[i];
-				if (el instanceof Ci.nsIImageLoadingContent) {
-					var ic = el.getRequest(Ci.nsIImageLoadingContent.CURRENT_REQUEST).image;
-					if (ic.animated) {
-						var origMode = ic.animationMode;
-						if (origMode) ic.animationMode = 0;
-						ic.resetAnimation();
-						if (origMode) ic.animationMode = origMode;
-					}
-				}
-			} catch (e) {
-				// It's probably not loaded.
-			}
+function getIc(el) {
+	if (el instanceof Ci.nsIImageLoadingContent)
+		return el.getRequest(Ci.nsIImageLoadingContent.CURRENT_REQUEST).image;
+	return null;
+}
+
+function resetImageAnimation(el) {
+	var ic = getIc(el);
+	if (ic && ic.animated) {
+		var origMode = ic.animationMode;
+		if (origMode) ic.animationMode = 0;
+		ic.resetAnimation();
+		if (origMode) ic.animationMode = origMode;
+	}
+}
+
+function resetGifsInWindow(win) {
+	// (Unfortunately this doesn't reach non-<img>s, but I don't see a way around that.)
+	var els = win.document.getElementsByTagName("img"), len = els.length;
+	for (var i = 0; i < len; ++i) {
+		try {
+			resetImageAnimation(els[i]);
+		} catch (e) {
+			// It's probably not loaded.
 		}
-	});
+	}
 }
 
 var registeredListeners = new WeakMap();
@@ -63,10 +66,10 @@ function startup(aData, aReason) {
 				if (ev.which === 77) { // M
 					var targetWin = window.content;
 					if (ev.shiftKey && !ev.ctrlKey) {
-						resetGIF(targetWin);
+						iterateFrames(targetWin, resetGifsInWindow);
 					}
 					else if (ev.ctrlKey && !ev.shiftKey) {
-						toggleGIF(targetWin);
+						iterateFrames(targetWin, toggleGifsInWindow);
 						ev.stopPropagation();
 						ev.preventDefault();
 					}
@@ -74,7 +77,7 @@ function startup(aData, aReason) {
 			};
 
 			registeredListeners.set(window, listener);
-			window.addEventListener('keydown', listener);
+			window.addEventListener("keydown", listener);
 		}
 		catch(ex) {}
 	},
@@ -82,7 +85,7 @@ function startup(aData, aReason) {
 		try {
 			var listener = registeredListeners.get(window);
 			if (listener)
-				window.removeEventListener('keydown', listener);
+				window.removeEventListener("keydown", listener);
 		}
 		catch(ex) {}
 	});
