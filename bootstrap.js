@@ -7,6 +7,9 @@ var Cc = Components.classes;
 var Cu = Components.utils;
 var Ci = Components.interfaces;
 
+var elService = Cc["@mozilla.org/eventlistenerservice;1"]
+	.getService(Ci.nsIEventListenerService);
+
 // From http://chrfb.deviantart.com/, licensed under CC by-nc-sa.
 var PauseIcon =
 	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAATCAYAAACKsM07AAAAB" +
@@ -150,15 +153,13 @@ function clearHoverEffect() {
 		CurrentHover.clearTimeouts();
 		if (CurrentHover.overlay && CurrentHover.overlay.parentNode)
 			CurrentHover.overlay.parentNode.removeChild(CurrentHover.overlay);
+		CurrentHover.element.removeEventListener("mousedown", onImageMouseDown);
 		if (CurrentHover.mo)
 			CurrentHover.mo.disconnect();
 	} catch (ex) {} // dead wrapper exceptions
 	CurrentHover = null;
 }
 function applyHoverEffect(el) {
-	if (el.offsetWidth < ButtonsMinWidth || el.offsetHeight < ButtonsMinHeight)
-		return;
-
 	var doc = el.ownerDocument, win = doc.defaultView;
 	var ic = getIc(el);
 
@@ -184,6 +185,14 @@ function applyHoverEffect(el) {
 		setPauseButtonAppearance: function() {}
 	};
 	CurrentHover.refresh();
+
+	if (Prefs.toggleOnClick)
+		el.addEventListener("mousedown", onImageMouseDown);
+
+	if (!Prefs.showOverlays)
+		return;
+	if (el.offsetWidth < ButtonsMinWidth || el.offsetHeight < ButtonsMinHeight)
+		return;
 
 	var overlay = doc.createElement("div");
 	overlay.id = "toggleGifsOverlay";
@@ -271,6 +280,32 @@ function applyHoverEffect(el) {
 	CurrentHover.mo = mo;
 }
 
+function hasEventListenerOfType(el, type) {
+    var listeners = elService.getListenerInfoFor(el, {});
+    for (var i = 0; i < listeners.length; i++)
+    {
+		var li = listeners[i];
+        if (li.type === type && li.listenerObject)
+			return true;
+	}
+	return false;
+}
+
+function onImageMouseDown(event) {
+	if (!isLeftClick(event) || event.defaultPrevented || !CurrentHover)
+		return;
+
+	// Check whether this event looks safe to handle by ourselves. (This is pretty awful, yes.)
+	var el = event.target, doc = el.ownerDocument, win = doc.defaultView;
+	var allowedCursors = ["", "default", "auto", "none", "not-allowed", "progress", "wait"];
+	if (allowedCursors.indexOf(win.getComputedStyle(el).cursor) === -1)
+		return;
+	if (hasEventListenerOfType(el, "click"))
+		return;
+
+	CurrentHover.toggleImageAnimation();
+}
+
 var CurrentHoverCancelLoadWaiters = function() {};
 function onMouseOver(chromeWin, event) {
 	var el = event.target;
@@ -341,7 +376,7 @@ function onMouseOut() {
 
 var registeredHoverListeners = new WeakMap();
 function updateHoverListeners(win, clear = false) {
-	var shouldAdd = clear ? false : Prefs.showOverlays;
+	var shouldAdd = clear ? false : (Prefs.showOverlays || Prefs.toggleOnClick);
 	if (registeredHoverListeners.has(win) === shouldAdd)
 		return;
 
@@ -499,6 +534,7 @@ function initPrefs() {
 	var defaults = {
 		defaultPaused: false,
 		showOverlays: true,
+		toggleOnClick: false,
 	};
 	var PrefBranch = "extensions.togglegifs.";
 	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
@@ -516,7 +552,7 @@ function initPrefs() {
 			if (key === "defaultPaused") {
 				// Don't update anything; this should just affect later page loads.
 			}
-			else if (key === "showOverlays") {
+			else if (key === "showOverlays" || key === "toggleOnClick") {
 				clearHoverEffect();
 				forAllWindows(updateHoverListeners);
 			}

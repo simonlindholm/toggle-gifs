@@ -2,4 +2,5 @@
 <vbox xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
 	<setting type="bool" pref="extensions.togglegifs.defaultPaused" title="Pause GIFs per default" />
 	<setting type="bool" pref="extensions.togglegifs.showOverlays" title="Display GIF controls on hover" />
+	<setting type="bool" pref="extensions.togglegifs.toggleOnClick" title="Toggle GIFs on click" />
 </vbox>
