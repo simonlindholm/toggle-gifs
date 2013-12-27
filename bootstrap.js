@@ -1,8 +1,53 @@
 // WTFPL
+/*jshint unused:vars, undef:true, moz:true*/
+/*global Components, APP_SHUTDOWN*/
+/*exported startup, shutdown, install, uninstall*/
 
 var Cc = Components.classes;
 var Cu = Components.utils;
 var Ci = Components.interfaces;
+
+// From http://chrfb.deviantart.com/, licensed under CC by-nc-sa.
+var PauseIcon =
+	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAATCAYAAACKsM07AAAAB" +
+	"HNCSVQICAgIfAhkiAAAAAlwSFlzAAAN1wAADdcBQiibeAAAABl0RVh0U29mdHdhcmUAd3d3" +
+	"Lmlua3NjYXBlLm9yZ5vuPBoAAACkSURBVDiN5ZQxDsIwDEV/ECNrR6ReJcehc4/BDBdBXXM" +
+	"XGLuyxN9SWRrBkroeGAp/+3qynhRbCagkpXQIIRwBYJqmR4zx6eElu5pARDqSA8lBRDovNw" +
+	"Wq2pNsSbaq2nt5yb4GSDYftfFyU5BzrqFV3BSIyOKgxf9A8PUdkFwctLgp2P4Tbf+KfmIHI" +
+	"96f2OjlpoDkGcBprlcvXyO4ALjN9e7lJS8fua+AWjO1xwAAAABJRU5ErkJggg==";
+var PlayIcon =
+	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAATCAYAAACKsM07AAAAB" +
+	"HNCSVQICAgIfAhkiAAAAAlwSFlzAAAN1wAADdcBQiibeAAAABl0RVh0U29mdHdhcmUAd3d3" +
+	"Lmlua3NjYXBlLm9yZ5vuPBoAAAF/SURBVDiNtZQxSwNBEIVn9kyfQrRV8DeIhZWdfyCpA6b" +
+	"WwtRyBFKI2qQ5mxPigUqaKxIh6QLpBUsRBBELAyEpPJKdc5+NQtDcuYn6YOHY2XvfvhlYog" +
+	"R1Op1VACqpbqtEA631ZbvdLrRaraV/AYjIujHmREROm83m9rwATiqEYYiPTwB4IaLr0Wh04" +
+	"DjOcy6Xe7MFpLXoc7GILItIwXGcWwD7tVptDUDi5awSBEGApBqArjHmTGsdFovF/m8TfFsi" +
+	"shnH8TEz+77vb82VwPO8xAQTMgD6xpgwiqK9Uqn0+vXAQtKf4/HYwp8UES0S0U4mk4mIaNc" +
+	"aoLW2AUxqY9rmXwHuiGh/JoBFi0BEfSK6YOay67q9mQBpCQCMlFJdZj6qVCqttFvMA3hkZk" +
+	"9rfV6tVp/SzFMBIjJtu6mUKmez2RvXda2G9OMMAMTM/ACgPBgMrur1+kzTT20RgJ5SKhSRw" +
+	"yAI7mcxtgF0mbk6HA4bjUYjmsc8Vfl8foVSnhJbvQNA+d4NuYFf9AAAAABJRU5ErkJggg==";
+var ResetIcon =
+	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAATCAYAAACKsM07AAAAB" +
+	"HNCSVQICAgIfAhkiAAAAAlwSFlzAAAN1wAADdcBQiibeAAAABl0RVh0U29mdHdhcmUAd3d3" +
+	"Lmlua3NjYXBlLm9yZ5vuPBoAAAMsSURBVDiNlZNPaGNVFMa/k5dnzTQkrTgTB7StSFGclSJ" +
+	"tM45Q0IXgoCAWcVFRYRYpjqi1dOEiNIjQdopmU2gNJTPdVRelhRbrImRMKVJUtJ3SWbQ7/y" +
+	"wUBt740vvnvOOmKUmadNoDZ3Hf+e73u/ecd4GzBa2urnY9SCQiVCgUugAgfFrnpaWlc67rX" +
+	"nVd9zqAl5rpCoVCdG1t7arjOB8CuHIqwPLycjcRjYjIG1rrC810i4uLz/q+P0xErzPzow+8" +
+	"wcLCwkPhcPgdZv5cRJ4kojAAqdetrKy0HBwcfCAinxljOqp9GwKy2WxLIpF4DkDaWvtq5Ts" +
+	"RaQA/V9YzMzPnYrFYj+d5GSJq2LZjgLm5uSdc1x201qYAPF5V+jcUCt0koq8BYH5+/mkReZ" +
+	"eZrzHz+WZdqAHkcrnXROQTY8yLAB6uKm07jpMOguD7vb29ci6XG9Rap4joBQBuM/MjwNTUV" +
+	"CQSidyw1r4tIo8QER3WAxH5NhKJDO/v7/8Vi8XaEonELWPMy0QUP8m4BuA4zpgxZqi+SES7" +
+	"5XL5WiqV8gAgm81mjTFvnsa4BmCtvSJy7OdAEAR3R0dHvQpPa91zFnMACB0CPtVa39Faozq" +
+	"NMf2ZTOa9Q60w88fGmD/qdc0SACq9RjqdvgDgSxF5C8BRf0XEBzATCoW+AHDPWtsZDoe/Ep" +
+	"FXALSedPpMJkNOZVEsFv8rFotLfX19f4pIFzM/xswUBIEbBEHSWvu87/u7ExMTd/r7+78zx" +
+	"njM3MnM55kZjbJUKo059dT19fXfksnkJjO3MPMlZnaYGUEQPAXgcm9v7/3x8fFfS6XST8lk" +
+	"8ndmjjLzM8wcqgdsbGyMhRpdbXJy8hfP80aY+brW+p4xBsYYWGsvWWtvVOl+LJfLH1lrR4w" +
+	"x9yu6Sh4NuVHMzs7+09bW9o0xpkcp9YNSyldKwRhT82qnp6f/bm9vzyqlLmutbyulykopKK" +
+	"Vqh3xSDA0NRX3fHxaR94moM5/PN9w3MDAQb21tHQEwCKAjn8/TsRk0is3NTd3d3V0CsMvMF" +
+	"7e2tm410u3s7Kh4PH47Go3etdZe3N7evnka//pTdpxF9z+OKu4QyrEbkgAAAABJRU5ErkJg" +
+	"gg==";
+
+var ButtonsMinWidth = 60, ButtonsMinHeight = 40;
 
 var {XPCOMUtils} = Cu.import("resource://gre/modules/XPCOMUtils.jsm", {});
 var {Services} = Cu.import("resource://gre/modules/Services.jsm", {});
@@ -11,6 +56,10 @@ var Prefs = {};
 
 // for debugging
 function log(msg) { Cu.reportError(msg); } void(log);
+
+function isLeftClick(event) {
+	return event.which === 1;
+}
 
 function getIc(el) {
 	if (el instanceof Ci.nsIImageLoadingContent)
@@ -31,10 +80,36 @@ function iterateFrames(win, callback) {
 	}
 }
 
+var individuallyToggledImages = new WeakMap();
 function toggleGifsInWindow(win) {
 	try {
 		var dwu = getDwu(win);
-		dwu.imageAnimationMode = (dwu.imageAnimationMode === 1 ? 0 : 1);
+		var curState = dwu.imageAnimationMode;
+
+		// If we've toggled an individual image, and it's still in the viewport,
+		// go by that instead of by the global animation mode.
+		var el = individuallyToggledImages.get(win.document);
+		if (el) {
+			individuallyToggledImages.delete(win.document);
+			try {
+				if (el.ownerDocument === win.document && win.document.contains(el) &&
+					win.getComputedStyle(el).display !== "none")
+				{
+					var re = el.getClientRects()[0];
+					if (re.bottom >= 0 && re.top <= win.innerHeight) {
+						var ic = getIc(el);
+						if (ic && ic.animated)
+							curState = ic.animationMode;
+					}
+				}
+			} catch (ex) {
+				// The image state has changed somehow. The default behavior will do.
+			}
+		}
+
+		dwu.imageAnimationMode = (curState === 1 ? 0 : 1);
+		if (CurrentHover)
+			CurrentHover.refresh();
 	} catch (ex) {
 		// Some invisible iframes don't have presContexts, which breaks
 		// the imageAnimationMode getter.
@@ -63,6 +138,225 @@ function resetGifsInWindow(win) {
 		try {
 			resetImageAnimation(els[i]);
 		} catch (ex) {} // not loaded
+	}
+}
+
+// It would be okay to have these per window, but I'm lazy.
+var CurrentHover = null;
+function clearHoverEffect() {
+	if (!CurrentHover)
+		return;
+	try {
+		CurrentHover.clearTimeouts();
+		if (CurrentHover.overlay && CurrentHover.overlay.parentNode)
+			CurrentHover.overlay.parentNode.removeChild(CurrentHover.overlay);
+		if (CurrentHover.mo)
+			CurrentHover.mo.disconnect();
+	} catch (ex) {} // dead wrapper exceptions
+	CurrentHover = null;
+}
+function applyHoverEffect(el) {
+	if (el.offsetWidth < ButtonsMinWidth || el.offsetHeight < ButtonsMinHeight)
+		return;
+
+	var doc = el.ownerDocument, win = doc.defaultView;
+	var ic = getIc(el);
+
+	CurrentHover = {
+		element: el,
+		playing: null,
+		overlay: null,
+		timeoutClearer: null,
+		clearTimeouts: function() {
+			if (this.timeoutClearer)
+				this.timeoutClearer();
+		},
+		toggleImageAnimation: function() {
+			individuallyToggledImages.set(el.ownerDocument, el);
+			this.playing = !this.playing;
+			ic.animationMode = this.playing ? 0 : 1;
+			this.setPauseButtonAppearance();
+		},
+		refresh: function() {
+			this.playing = (ic.animationMode === 0);
+			this.setPauseButtonAppearance();
+		},
+		setPauseButtonAppearance: function() {}
+	};
+	CurrentHover.refresh();
+
+	var overlay = doc.createElement("div");
+	overlay.id = "toggleGifsOverlay";
+
+	var css = doc.createElement("style");
+	css.textContent = [
+		"#toggleGifsOverlay, #toggleGifsOverlay * {",
+			"all: initial;", // Fx27+
+			"border: none !important;",
+			"margin: 0 !important;",
+			"padding: 0 !important;",
+			"-moz-box-sizing: content-box !important;",
+		"}",
+		"#toggleGifsOverlay > style {",
+			"display: none !important;",
+		"}",
+		"#toggleGifsOverlay {",
+			"position: absolute !important;",
+			"z-index: 2147483647 !important;",
+		"}",
+		"#toggleGifsOverlay > #toggleGifsContent {",
+			"position: absolute !important;",
+			"top: 0 !important;",
+			"right: 0 !important;",
+			"text-align: right !important;",
+			"white-space: nowrap !important;",
+		"}",
+		"#toggleGifsResetButton, #toggleGifsPauseButton {",
+			"width: 24px !important;",
+			"height: 25px !important;",
+			"display: inline-block !important;",
+			"background-repeat: no-repeat !important;",
+			"background-position: 0 3px !important;",
+			"cursor: pointer !important;",
+		"}",
+	].join("\n");
+	overlay.appendChild(css);
+
+	var resetButton = doc.createElement("span");
+	resetButton.id = "toggleGifsResetButton";
+	resetButton.style.backgroundImage = "url(" + ResetIcon + ")";
+	resetButton.onmousedown = function(event) {
+		if (!isLeftClick(event))
+			return;
+		resetImageAnimation(el);
+		event.stopPropagation();
+		event.preventDefault();
+	};
+	var pauseButton = doc.createElement("span");
+	pauseButton.id = "toggleGifsPauseButton";
+	CurrentHover.setPauseButtonAppearance = function() {
+		pauseButton.style.backgroundImage =
+			"url(" + (this.playing ? PauseIcon : PlayIcon) + ")";
+	};
+	CurrentHover.setPauseButtonAppearance();
+	pauseButton.onmousedown = function(event) {
+		if (!isLeftClick(event))
+			return;
+		CurrentHover.toggleImageAnimation();
+		event.stopPropagation();
+		event.preventDefault();
+	};
+
+	var content = doc.createElement("span");
+	content.id = "toggleGifsContent";
+	content.appendChild(resetButton);
+	content.appendChild(pauseButton);
+	overlay.appendChild(content);
+
+	var reposition = function() {
+		var par = el.offsetParent;
+		var style = doc.defaultView.getComputedStyle(el);
+		var y = el.offsetTop + parseFloat(style.borderTopWidth);
+		var x = el.offsetLeft + el.offsetWidth - parseFloat(style.borderLeftWidth);
+		overlay.style.top = y + "px";
+		overlay.style.left = x + "px";
+		par.appendChild(overlay);
+	};
+	reposition();
+
+	CurrentHover.overlay = overlay;
+
+	var mo = new win.MutationObserver(reposition);
+	mo.observe(el, {attributes: true});
+	CurrentHover.mo = mo;
+}
+
+var CurrentHoverCancelLoadWaiters = function() {};
+function onMouseOver(chromeWin, event) {
+	var el = event.target;
+	CurrentHoverCancelLoadWaiters();
+	if (CurrentHover) {
+		var sameTarget = (el === CurrentHover.element ||
+			(el.id && el.id.startsWith("toggleGifs")));
+		if (sameTarget) {
+			CurrentHover.clearTimeouts();
+			return;
+		}
+		clearHoverEffect();
+	}
+
+	if (el.localName !== "img")
+		return;
+
+	var win = el.ownerDocument.defaultView;
+	if (!(el instanceof win.HTMLElement))
+		return;
+
+	try {
+		var ic = getIc(el);
+		if (!ic || !ic.animated)
+			return;
+	} catch (ex) {
+		// Image not loaded. Try again after a while, until mouseout or another
+		// mouseover happens and we clear the timer.
+		var to = win.setTimeout(function() {
+			onMouseOver(chromeWin, event);
+		}, 30);
+		CurrentHoverCancelLoadWaiters = function() {
+			CurrentHoverCancelLoadWaiters = function() {};
+			try {
+				win.clearTimeout(to);
+			} catch (ex) {} // dead wrappers
+		};
+		return;
+	}
+
+	// Check that this is a content page.
+	while (win.parent && win.parent !== win)
+		win = win.parent;
+	if (win !== chromeWin.content)
+		return;
+
+	applyHoverEffect(el);
+}
+
+function onMouseOut() {
+	CurrentHoverCancelLoadWaiters();
+	if (!CurrentHover || CurrentHover.timeoutClearer)
+		return;
+	try {
+		var win = CurrentHover.element.ownerDocument.defaultView;
+		var timeout = win.setTimeout(function() {
+			CurrentHover.timeoutClearer = null;
+			clearHoverEffect();
+		}, 50);
+		CurrentHover.timeoutClearer = function() {
+			CurrentHover.timeoutClearer = null;
+			win.clearTimeout(timeout);
+		};
+	} catch (ex) {
+		clearHoverEffect();
+	}
+}
+
+var registeredHoverListeners = new WeakMap();
+function updateHoverListeners(win, clear = false) {
+	var shouldAdd = clear ? false : Prefs.showOverlays;
+	if (registeredHoverListeners.has(win) === shouldAdd)
+		return;
+
+	if (shouldAdd) {
+		var mouseOver = onMouseOver.bind(null, win);
+		var mouseOut = onMouseOut;
+		win.addEventListener("mouseover", mouseOver);
+		win.addEventListener("mouseout", mouseOut);
+		registeredHoverListeners.set(win, [mouseOver, mouseOut]);
+	}
+	else {
+		var li = registeredHoverListeners.get(win);
+		win.removeEventListener("mouseover", li[0]);
+		win.removeEventListener("mouseout", li[1]);
+		registeredHoverListeners.delete(win);
 	}
 }
 
@@ -102,11 +396,14 @@ function startup(aData, aReason) {
 	watchWindows(function togglegif_load(win) {
 		try {
 			addKeyListener(win);
+			updateHoverListeners(win);
 		} catch(ex) {}
 	},
 	function togglegif_unload(win) {
 		try {
 			removeKeyListener(win);
+			clearHoverEffect();
+			updateHoverListeners(win, true);
 		} catch(ex) {}
 	},
 	function togglegif_content_load(win) {
@@ -201,6 +498,7 @@ function initPrefs() {
 
 	var defaults = {
 		defaultPaused: false,
+		showOverlays: true,
 	};
 	var PrefBranch = "extensions.togglegifs.";
 	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
@@ -217,6 +515,10 @@ function initPrefs() {
 			Prefs[key] = getPref(branch, key);
 			if (key === "defaultPaused") {
 				// Don't update anything; this should just affect later page loads.
+			}
+			else if (key === "showOverlays") {
+				clearHoverEffect();
+				forAllWindows(updateHoverListeners);
 			}
 		}
 	};
