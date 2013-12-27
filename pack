@@ -1,2 +1,2 @@
 #!/bin/sh
-zip addon.zip `ls|grep -v pack|grep -v notes` -rq && mv addon.zip ../misc.xpi
+zip addon.zip `ls|grep -v pack|grep -v notes|grep -v temp` -rq && mv addon.zip ../toggle-gifs.xpi

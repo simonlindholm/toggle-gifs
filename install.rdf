@@ -4,7 +4,7 @@
         <em:id>giftoggle@simonsoftware.se</em:id>
         <em:type>2</em:type>
         <em:name>Toggle animated GIFs</em:name>
-        <em:version>0.2.1</em:version>
+        <em:version>1.0</em:version>
         <em:bootstrap>true</em:bootstrap>
         <em:creator>Simon Lindholm</em:creator>
         <em:optionsType>2</em:optionsType>
@@ -12,7 +12,7 @@
             <Description>
                 <em:id>{ec8030f7-c20a-464f-9b0e-13a3a9e97384}</em:id>
                 <em:minVersion>15.0</em:minVersion>
-                <em:maxVersion>30.0a1</em:maxVersion>
+                <em:maxVersion>29.0a1</em:maxVersion>
             </Description>
         </em:targetApplication>
     </Description>
