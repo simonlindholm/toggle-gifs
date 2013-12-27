@@ -397,6 +397,8 @@ function updateHoverListeners(win, clear = false) {
 
 var registeredKeyListeners = new WeakMap();
 function addKeyListener(win) {
+	if (registeredKeyListeners.has(win))
+		return;
 	var listener = function(ev) {
 		if (ev.defaultPrevented || ev.altKey)
 			return;
@@ -420,6 +422,7 @@ function removeKeyListener(win) {
 	var listener = registeredKeyListeners.get(win);
 	if (listener)
 		win.removeEventListener("keydown", listener);
+	registeredKeyListeners.delete(win);
 }
 
 var unloaders = [];
@@ -430,13 +433,15 @@ function startup(aData, aReason) {
 	// Hook into all browser windows, current and future.
 	watchWindows(function togglegif_load(win) {
 		try {
-			addKeyListener(win);
+			if (Prefs.enableShortcuts)
+				addKeyListener(win);
 			updateHoverListeners(win);
 		} catch(ex) {}
 	},
 	function togglegif_unload(win) {
 		try {
-			removeKeyListener(win);
+			if (Prefs.enableShortcuts)
+				removeKeyListener(win);
 			clearHoverEffect();
 			updateHoverListeners(win, true);
 		} catch(ex) {}
@@ -535,6 +540,7 @@ function initPrefs() {
 		defaultPaused: false,
 		showOverlays: true,
 		toggleOnClick: false,
+		enableShortcuts: true,
 	};
 	var PrefBranch = "extensions.togglegifs.";
 	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
@@ -551,6 +557,9 @@ function initPrefs() {
 			Prefs[key] = getPref(branch, key);
 			if (key === "defaultPaused") {
 				// Don't update anything; this should just affect later page loads.
+			}
+			else if (key === "enableShortcuts") {
+				forAllWindows(Prefs[key] ? addKeyListener : removeKeyListener);
 			}
 			else if (key === "showOverlays" || key === "toggleOnClick") {
 				clearHoverEffect();
