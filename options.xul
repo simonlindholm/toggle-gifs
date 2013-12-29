@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <vbox xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
-	<setting type="bool" pref="extensions.togglegifs.defaultPaused" title="Pause GIFs per default" />
+	<setting type="bool" pref="extensions.togglegifs.defaultPaused" title="Pause GIFs by default" />
 	<setting type="bool" pref="extensions.togglegifs.showOverlays" title="Display GIF controls on hover" />
 	<setting type="bool" pref="extensions.togglegifs.toggleOnClick" title="Toggle GIFs on click" />
 	<setting type="bool" pref="extensions.togglegifs.enableShortcuts" title="Enable Ctrl+M and Shift+M shortcuts" />
