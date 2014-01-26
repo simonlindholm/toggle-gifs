@@ -56,6 +56,9 @@ var {XPCOMUtils} = Cu.import("resource://gre/modules/XPCOMUtils.jsm", {});
 var {Services} = Cu.import("resource://gre/modules/Services.jsm", {});
 
 var Prefs = {};
+function shouldPlayOnHover() {
+	return Prefs.defaultPaused && Prefs.playOnHover;
+}
 
 // for debugging
 function log(msg) { Cu.reportError(msg); } void(log);
@@ -188,6 +191,16 @@ function applyHoverEffect(el) {
 
 	if (Prefs.toggleOnClick)
 		el.addEventListener("mousedown", onImageMouseDown);
+
+	if (shouldPlayOnHover() && !CurrentHover.playing) {
+		var previous = individuallyToggledImages.get(el.ownerDocument);
+		if (previous !== el) {
+			try {
+				getIc(previous).animationMode = 1;
+			} catch(e) {} // dead image
+			CurrentHover.toggleImageAnimation();
+		}
+	}
 
 	if (!Prefs.showOverlays)
 		return;
@@ -375,11 +388,9 @@ function onMouseOut() {
 }
 
 var registeredHoverListeners = new WeakMap();
-function updateHoverListeners(win, clear = false) {
-	var shouldAdd = clear ? false : (Prefs.showOverlays || Prefs.toggleOnClick);
+function doUpdateHoverListeners(win, shouldAdd) {
 	if (registeredHoverListeners.has(win) === shouldAdd)
 		return;
-
 	if (shouldAdd) {
 		var mouseOver = onMouseOver.bind(null, win);
 		var mouseOut = onMouseOut;
@@ -393,6 +404,10 @@ function updateHoverListeners(win, clear = false) {
 		win.removeEventListener("mouseout", li[1]);
 		registeredHoverListeners.delete(win);
 	}
+}
+function updateHoverListeners(win) {
+	var shouldAdd = Prefs.showOverlays || Prefs.toggleOnClick || shouldPlayOnHover();
+	doUpdateHoverListeners(win, shouldAdd);
 }
 
 var registeredKeyListeners = new WeakMap();
@@ -443,7 +458,7 @@ function startup(aData, aReason) {
 			if (Prefs.enableShortcuts)
 				removeKeyListener(win);
 			clearHoverEffect();
-			updateHoverListeners(win, true);
+			doUpdateHoverListeners(win, false);
 		} catch(ex) {}
 	},
 	function togglegif_content_load(win) {
@@ -541,6 +556,7 @@ function initPrefs() {
 		showOverlays: true,
 		toggleOnClick: false,
 		enableShortcuts: true,
+		playOnHover: true,
 	};
 	var PrefBranch = "extensions.togglegifs.";
 	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
