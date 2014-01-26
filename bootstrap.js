@@ -1,6 +1,6 @@
 // WTFPL
 /*jshint unused:vars, undef:true, moz:true*/
-/*global Components, APP_SHUTDOWN*/
+/*global Components, APP_SHUTDOWN, ADDON_DISABLE, ADDON_UNINSTALL, ADDON_DOWNGRADE*/
 /*exported startup, shutdown, install, uninstall*/
 
 var Cc = Components.classes;
@@ -55,9 +55,11 @@ var ButtonsMinWidth = 60, ButtonsMinHeight = 40;
 var {XPCOMUtils} = Cu.import("resource://gre/modules/XPCOMUtils.jsm", {});
 var {Services} = Cu.import("resource://gre/modules/Services.jsm", {});
 
+var PrefBranch = "extensions.togglegifs.";
 var Prefs = {};
-function shouldPlayOnHover() {
-	return Prefs.defaultPaused && Prefs.playOnHover;
+
+function getWantedGlobalAnimationMode() {
+	return Prefs.defaultPaused ? "none" : "normal";
 }
 
 // for debugging
@@ -192,7 +194,7 @@ function applyHoverEffect(el) {
 	if (Prefs.toggleOnClick)
 		el.addEventListener("mousedown", onImageMouseDown);
 
-	if (shouldPlayOnHover() && !CurrentHover.playing) {
+	if (Prefs.playOnHover && !CurrentHover.playing) {
 		var previous = individuallyToggledImages.get(el.ownerDocument);
 		if (previous !== el) {
 			try {
@@ -388,7 +390,7 @@ function onMouseOut() {
 }
 
 var registeredHoverListeners = new WeakMap();
-function doUpdateHoverListeners(win, shouldAdd) {
+function updateHoverListeners(win, shouldAdd = true) {
 	if (registeredHoverListeners.has(win) === shouldAdd)
 		return;
 	if (shouldAdd) {
@@ -404,10 +406,6 @@ function doUpdateHoverListeners(win, shouldAdd) {
 		win.removeEventListener("mouseout", li[1]);
 		registeredHoverListeners.delete(win);
 	}
-}
-function updateHoverListeners(win) {
-	var shouldAdd = Prefs.showOverlays || Prefs.toggleOnClick || shouldPlayOnHover();
-	doUpdateHoverListeners(win, shouldAdd);
 }
 
 var registeredKeyListeners = new WeakMap();
@@ -442,6 +440,11 @@ function removeKeyListener(win) {
 
 var unloaders = [];
 
+function shouldMigrateAnimationOption(version) {
+	version = version || "";
+	return (version[0] === "0" || version === "1.0"); // <= 1.0
+}
+
 function startup(aData, aReason) {
 	initPrefs();
 
@@ -458,21 +461,13 @@ function startup(aData, aReason) {
 			if (Prefs.enableShortcuts)
 				removeKeyListener(win);
 			clearHoverEffect();
-			doUpdateHoverListeners(win, false);
+			updateHoverListeners(win, false);
 		} catch(ex) {}
-	},
-	function togglegif_content_load(win) {
-		if (Prefs.defaultPaused)
-			setGifStateForWindow(win, false);
-	},
-	function togglegif_content_unload(win) {
-		var initialState = Services.prefs.getCharPref("image.animation_mode");
-		setGifStateForWindow(win, initialState === "normal");
 	});
 }
 
 function shutdown(aData, aReason) {
-	if (aReason == APP_SHUTDOWN)
+	if (aReason === APP_SHUTDOWN)
 		return;
 
 	unloaders.forEach(function(f) {
@@ -480,11 +475,30 @@ function shutdown(aData, aReason) {
 			f();
 		} catch (ex) {}
 	});
+
+	if (aReason === ADDON_DISABLE || aReason === ADDON_UNINSTALL ||
+		(aReason === ADDON_DOWNGRADE && shouldMigrateAnimationOption(aData && aData.newVersion)))
+	{
+		var globalAnimMode = Services.prefs.getCharPref("image.animation_mode");
+		if (globalAnimMode === getWantedGlobalAnimationMode()) {
+			var original = Prefs.originalAnimationMode;
+			if (original !== "undefined" && original !== globalAnimMode) {
+				// Reset it back the way it was originally.
+				Services.prefs.setCharPref("image.animation_mode", original);
+
+				forAllWindows(null, function(contentWin) {
+					setGifStateForWindow(contentWin, original === "normal");
+				});
+			}
+		}
+		Services.prefs.getBranch(PrefBranch)
+			.setCharPref("originalAnimationMode", "undefined");
+	}
 }
 
-function install(aData, aReason) { }
+function install(aData, aReason) {}
 
-function uninstall(aData, aReason) { }
+function uninstall(aData, aReason) {}
 
 
 function forAllWindows(callback, contentCallback) {
@@ -503,10 +517,10 @@ function forAllWindows(callback, contentCallback) {
 	}
 }
 
-function watchWindows(callback, uncallback, contentCallback, contentUncallback) {
-	forAllWindows(callback, contentCallback);
+function watchWindows(callback, uncallback) {
+	forAllWindows(callback);
 	unloaders.push(function() {
-		forAllWindows(uncallback, contentUncallback);
+		forAllWindows(uncallback);
 	});
 
 	var windowWatcher = {
@@ -515,30 +529,43 @@ function watchWindows(callback, uncallback, contentCallback, contentUncallback) 
 			if (topic === "chrome-document-global-created") {
 				win.addEventListener("load", function onLoad() {
 					win.removeEventListener("load", onLoad, false);
-					if (win.document.documentElement.getAttribute("windowtype") == "navigator:browser")
+					if (win.document.documentElement.getAttribute("windowtype") === "navigator:browser")
 						callback(win);
 				}, false);
-			}
-			else if (topic === "content-document-global-created") {
-				contentCallback(win);
 			}
 		}
 	};
 
 	Services.obs.addObserver(windowWatcher, "chrome-document-global-created", false);
-	Services.obs.addObserver(windowWatcher, "content-document-global-created", false);
 	unloaders.push(function() {
-		Services.obs.removeObserver(windowWatcher, "content-document-global-created");
 		Services.obs.removeObserver(windowWatcher, "chrome-document-global-created");
 	});
 }
 
 function initPrefs() {
-	function getPref(branch, key) {
-		return branch.getBoolPref(key); // everything is a bool currently
+	var defaults = {
+		defaultPaused: false,
+		showOverlays: true,
+		toggleOnClick: false,
+		enableShortcuts: true,
+		originalAnimationMode: "undefined",
+		playOnHover: true,
+	};
+	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
+	var branch = Services.prefs.getBranch(PrefBranch);
+
+	function getOwnPref(key) {
+		switch (typeof defaults[key]) {
+		case "boolean":
+			return branch.getBoolPref(key);
+		case "number":
+			return branch.getIntPref(key);
+		case "string":
+			return branch.getCharPref(key);
+		}
 	}
 	function setPref(branch, key, value) {
-		switch (typeof value) {
+		switch (typeof defaults[key]) {
 		case "boolean":
 			branch.setBoolPref(key, value);
 			break;
@@ -550,29 +577,42 @@ function initPrefs() {
 			break;
 		}
 	}
+	function setOwnPref(key, value) {
+		setPref(branch, key, value);
+		Prefs[key] = value;
+	}
 
-	var defaults = {
-		defaultPaused: false,
-		showOverlays: true,
-		toggleOnClick: false,
-		enableShortcuts: true,
-		playOnHover: true,
-	};
-	var PrefBranch = "extensions.togglegifs.";
-	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
-	var branch = Services.prefs.getBranch(PrefBranch);
 	for (var key in defaults) {
 		setPref(defaultBranch, key, defaults[key]);
-		Prefs[key] = getPref(branch, key);
+		Prefs[key] = getOwnPref(key);
+	}
+
+	if (Prefs.originalAnimationMode === "undefined") {
+		// Install time, harmonize the global and local animation prefs.
+		setOwnPref("originalAnimationMode", Services.prefs.getCharPref("image.animation_mode"));
+
+		if (Prefs.defaultPaused) {
+			// A reinstall/upgrade with paused GIFs; restore the previous pref value.
+			var wanted = getWantedGlobalAnimationMode();
+			if (Prefs.originalAnimationMode !== wanted)
+				Services.prefs.setCharPref("image.animation_mode", wanted);
+		}
+		else {
+			// Either a clean install, or the old value of defaultPaused was false
+			// (likely unchanged). Set defaultPaused according to image.animation_mode.
+			setOwnPref("defaultPaused", Prefs.originalAnimationMode === "none");
+		}
 	}
 
 	var prefWatcher = {
 		observe: function(subject, topic, key) {
 			if (topic !== "nsPref:changed")
 				return;
-			Prefs[key] = getPref(branch, key);
+			Prefs[key] = getOwnPref(key);
 			if (key === "defaultPaused") {
-				// Don't update anything; this should just affect later page loads.
+				// Update the global pref so this actually has an effect.
+				// Don't do anything else; this should just affect later page loads.
+				Services.prefs.setCharPref("image.animation_mode", getWantedGlobalAnimationMode());
 			}
 			else if (key === "enableShortcuts") {
 				forAllWindows(Prefs[key] ? addKeyListener : removeKeyListener);
