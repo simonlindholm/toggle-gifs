@@ -278,10 +278,20 @@ function applyHoverEffect(el) {
 	overlay.appendChild(content);
 
 	var reposition = function() {
-		var par = el.offsetParent;
-		var style = doc.defaultView.getComputedStyle(el);
-		var y = el.offsetTop + parseFloat(style.borderTopWidth);
-		var x = el.offsetLeft + el.offsetWidth - parseFloat(style.borderLeftWidth);
+		var par = el.offsetParent, x = el.offsetLeft, y = el.offsetTop;
+
+		// Skip past <td>s and <table>s, which appear in the offsetParent tree
+		// despite not being positioned.
+		while (par && par.localName !== "body" && win.getComputedStyle(par).position === "static") {
+			x += par.offsetLeft;
+			y += par.offsetTop;
+			par = par.offsetParent;
+		}
+
+		par = par || doc.body;
+		var style = win.getComputedStyle(el);
+		y += parseFloat(style.borderTopWidth);
+		x += el.offsetWidth - parseFloat(style.borderLeftWidth);
 		overlay.style.top = y + "px";
 		overlay.style.left = x + "px";
 		par.appendChild(overlay);
