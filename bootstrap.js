@@ -98,7 +98,6 @@ function toggleGifsInWindow(win) {
 		// go by that instead of by the global animation mode.
 		var el = individuallyToggledImages.get(win.document);
 		if (el) {
-			individuallyToggledImages.delete(win.document);
 			try {
 				if (el.ownerDocument === win.document && win.document.contains(el) &&
 					win.getComputedStyle(el).display !== "none")
