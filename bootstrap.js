@@ -558,7 +558,7 @@ function initPrefs() {
 		toggleOnClick: false,
 		enableShortcuts: true,
 		originalAnimationMode: "undefined",
-		playOnHover: true,
+		playOnHover: false,
 	};
 	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
 	var branch = Services.prefs.getBranch(PrefBranch);
