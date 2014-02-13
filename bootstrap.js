@@ -305,11 +305,10 @@ function applyHoverEffect(el) {
 }
 
 function hasEventListenerOfType(el, type) {
-    var listeners = elService.getListenerInfoFor(el, {});
-    for (var i = 0; i < listeners.length; i++)
-    {
+	var listeners = elService.getListenerInfoFor(el, {});
+	for (var i = 0; i < listeners.length; i++) {
 		var li = listeners[i];
-        if (li.type === type && li.listenerObject)
+		if (li.type === type && li.listenerObject)
 			return true;
 	}
 	return false;
