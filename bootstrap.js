@@ -56,6 +56,11 @@ var ButtonsMinWidth = 60, ButtonsMinHeight = 40;
 
 var {XPCOMUtils} = Cu.import("resource://gre/modules/XPCOMUtils.jsm", {});
 var {Services} = Cu.import("resource://gre/modules/Services.jsm", {});
+try {
+	var {CustomizableUI} = Cu.import("resource:///modules/CustomizableUI.jsm");
+} catch (ex) {
+	// Pre-Australis; we don't care.
+}
 
 var AddonIsEnabled = true;
 var PrefBranch = "extensions.togglegifs.";
@@ -610,14 +615,31 @@ function shouldMigrateAnimationOption(version) {
 	return (version[0] === "0" || version === "1.0"); // <= 1.0
 }
 
+function addStylesheets(win, add) {
+	let doc = win.document;
+	if (add) {
+		let href = "chrome://toggle-gifs/skin/toolbar.css";
+		let s = doc.createProcessingInstruction("xml-stylesheet", 'href="' + href + '"');
+		doc.togglegifsStylesheet = s;
+		doc.insertBefore(s, doc.documentElement);
+	}
+	else {
+		let s = doc.togglegifsStylesheet;
+		if (s) s.parentNode.removeChild(s);
+	}
+}
+
 function startup(aData, aReason) {
 	initPrefs();
+	initToolbarButton();
+	unloaders.push(destroyToolbarButton);
 
 	// Hook into all browser windows, current and future.
 	watchWindows(function togglegif_load(win) {
 		try {
 			updateKeyListener(win);
 			updateHoverListeners(win);
+			addStylesheets(win, true);
 		} catch(ex) {}
 	},
 	function togglegif_unload(win) {
@@ -625,6 +647,7 @@ function startup(aData, aReason) {
 			updateKeyListener(win, true);
 			clearHoverEffect();
 			updateHoverListeners(win, false);
+			addStylesheets(win, false);
 		} catch(ex) {}
 	});
 
@@ -764,6 +787,26 @@ function handleShortcutKeyDown(event) {
 	}
 	this.inputChanged();
 	cancelEvent(event);
+}
+
+function initToolbarButton() {
+	if (!CustomizableUI)
+		return;
+	CustomizableUI.createWidget({
+		id: "togglegifs-toolbarbutton-toggle",
+		label: "Toggle GIFs",
+		tooltiptext: "Toggle whether GIFs animate on the current page",
+		onCommand: function(ev) {
+			var win = ev.target.ownerDocument.defaultView;
+			var targetWin = win.content;
+			iterateFrames(targetWin, toggleGifsInWindow);
+		}
+	});
+}
+
+function destroyToolbarButton() {
+	if (CustomizableUI)
+		CustomizableUI.destroyWidget("togglegifs-toolbarbutton-toggle");
 }
 
 function initPrefs() {

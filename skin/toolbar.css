@@ -1,0 +1,10 @@
+/* Icon by @sootn */
+#togglegifs-toolbarbutton-toggle {
+	list-style-image: url("chrome://toggle-gifs/skin/toggle-18.png");
+	-moz-image-region: rect(0px, 18px, 18px, 0px);
+}
+#togglegifs-toolbarbutton-toggle[cui-areatype="menu-panel"],
+toolbarpaletteitem[place="palette"] > #togglegifs-toolbarbutton-toggle {
+	list-style-image: url("chrome://toggle-gifs/skin/toggle-32.png");
+	-moz-image-region: rect(0px, 32px, 32px, 0px);
+}
