@@ -149,6 +149,40 @@ function resetGifsInWindow(win) {
 	}
 }
 
+function isForumImage(el) {
+	if (el.alt && el.alt.toLowerCase().contains("avatar"))
+		return true;
+	if (el.src && (el.src.contains("/signature") || el.src.contains("/avatars/")))
+		return true;
+	var selectors = [
+		".signature",
+		".profile",
+		".avatar",
+		".postavatar",
+		".postprofile",
+		".postsignature",
+		".userinfo",
+		".Signature",
+		".Author",
+		"hr.signature ~ *",
+	];
+	var selector = selectors.join(", ");
+	var matches = el.matches || el.mozMatchesSelector;
+	while (el && el.parentNode) {
+		if (matches.call(el, selector))
+			return true;
+		var sib = el.nextElementSibling;
+		if (sib && matches.call(sib, ".postbody + .postbody + br[clear=all]"))
+			return true;
+		el = el.parentNode;
+	}
+	return false;
+}
+
+function shouldPlayOnHover(el) {
+	return Prefs.playOnHover && !(Prefs.exceptForums && isForumImage(el));
+}
+
 // It would be okay to have these per window, but I'm lazy.
 var CurrentHover = null;
 function clearHoverEffect() {
@@ -194,7 +228,7 @@ function applyHoverEffect(el) {
 	if (Prefs.toggleOnClick)
 		el.addEventListener("mousedown", onImageMouseDown);
 
-	if (Prefs.playOnHover && !CurrentHover.playing) {
+	if (shouldPlayOnHover(el) && !CurrentHover.playing) {
 		var previous = individuallyToggledImages.get(el.ownerDocument);
 		if (previous !== el) {
 			try {
@@ -599,6 +633,7 @@ function initPrefs() {
 		enableShortcuts: true,
 		originalAnimationMode: "undefined",
 		playOnHover: false,
+		exceptForums: false,
 	};
 	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
 	var branch = Services.prefs.getBranch(PrefBranch);
@@ -665,10 +700,6 @@ function initPrefs() {
 			}
 			else if (key === "enableShortcuts") {
 				forAllWindows(Prefs[key] ? addKeyListener : removeKeyListener);
-			}
-			else if (key === "showOverlays" || key === "toggleOnClick") {
-				clearHoverEffect();
-				forAllWindows(updateHoverListeners);
 			}
 		}
 	};

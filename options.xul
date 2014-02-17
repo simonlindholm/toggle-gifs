@@ -5,4 +5,5 @@
 	<setting type="bool" pref="extensions.togglegifs.enableShortcuts" title="Enable Ctrl+M and Shift+M shortcuts" />
 	<setting type="bool" pref="extensions.togglegifs.defaultPaused" title="Pause GIFs by default" />
 	<setting type="bool" pref="extensions.togglegifs.playOnHover" title="Auto-play on hover" />
+	<setting type="bool" pref="extensions.togglegifs.exceptForums" title="… but try to avoid it for forum avatars and signatures" />
 </vbox>
