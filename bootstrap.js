@@ -248,6 +248,7 @@ function applyHoverEffect(el) {
 	].join("\n");
 	overlay.appendChild(css);
 
+	// TODO: All these listeners should be capturing and registered on the document.
 	var resetButton = doc.createElement("span");
 	resetButton.id = "toggleGifsResetButton";
 	resetButton.style.backgroundImage = "url(" + ResetIcon + ")";
@@ -255,9 +256,9 @@ function applyHoverEffect(el) {
 		if (!isLeftClick(event))
 			return;
 		resetImageAnimation(el);
-		event.stopPropagation();
-		event.preventDefault();
+		cancelEvent(event);
 	};
+	resetButton.onclick = resetButton.onmouseup = cancelEvent;
 	var pauseButton = doc.createElement("span");
 	pauseButton.id = "toggleGifsPauseButton";
 	CurrentHover.setPauseButtonAppearance = function() {
@@ -269,9 +270,9 @@ function applyHoverEffect(el) {
 		if (!isLeftClick(event))
 			return;
 		CurrentHover.toggleImageAnimation();
-		event.stopPropagation();
-		event.preventDefault();
+		cancelEvent(event);
 	};
+	pauseButton.onclick = pauseButton.onmouseup = cancelEvent;
 
 	var content = doc.createElement("span");
 	content.id = "toggleGifsContent";
@@ -316,6 +317,11 @@ function hasEventListenerOfType(el, type) {
 			return true;
 	}
 	return false;
+}
+
+function cancelEvent(event) {
+	event.stopPropagation();
+	event.preventDefault();
 }
 
 function onImageMouseDown(event) {
