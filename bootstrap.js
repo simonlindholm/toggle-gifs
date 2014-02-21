@@ -99,10 +99,11 @@ function toggleGifsInWindow(win) {
 		var el = individuallyToggledImages.get(win.document);
 		if (el) {
 			try {
-				if (el.ownerDocument === win.document && win.document.contains(el) &&
-					win.getComputedStyle(el).display !== "none")
+				var offsetBase = el.positionAsIf || el;
+				if (offsetBase.ownerDocument === win.document && win.document.contains(offsetBase) &&
+					win.getComputedStyle(offsetBase).display !== "none")
 				{
-					var re = el.getClientRects()[0];
+					var re = offsetBase.getClientRects()[0];
 					if (re.bottom >= 0 && re.top <= win.innerHeight) {
 						var ic = getIc(el);
 						if (ic && ic.animated)
@@ -205,7 +206,9 @@ function applyHoverEffect(el) {
 
 	if (!Prefs.showOverlays)
 		return;
-	if (el.offsetWidth < ButtonsMinWidth || el.offsetHeight < ButtonsMinHeight)
+
+	var offsetBase = el.positionAsIf || el;
+	if (offsetBase.offsetWidth < ButtonsMinWidth || offsetBase.offsetHeight < ButtonsMinHeight)
 		return;
 
 	var overlay = doc.createElement("div");
@@ -277,7 +280,8 @@ function applyHoverEffect(el) {
 	overlay.appendChild(content);
 
 	var reposition = function() {
-		var par = el.offsetParent, x = el.offsetLeft, y = el.offsetTop;
+		var par = offsetBase.offsetParent;
+		var x = offsetBase.offsetLeft, y = offsetBase.offsetTop;
 
 		// Skip past <td>s and <table>s, which appear in the offsetParent tree
 		// despite not being positioned.
@@ -288,9 +292,9 @@ function applyHoverEffect(el) {
 		}
 
 		par = par || doc.body;
-		var style = win.getComputedStyle(el);
+		var style = win.getComputedStyle(offsetBase);
 		y += parseFloat(style.borderTopWidth);
-		x += el.offsetWidth - parseFloat(style.borderLeftWidth);
+		x += offsetBase.offsetWidth - parseFloat(style.borderLeftWidth);
 		overlay.style.top = y + "px";
 		overlay.style.left = x + "px";
 		par.appendChild(overlay);
@@ -329,13 +333,53 @@ function onImageMouseDown(event) {
 	CurrentHover.toggleImageAnimation();
 }
 
+function setTumblrRelatedImage(el) {
+	if (el.relatedTo)
+		return true;
+	var doc = el.ownerDocument, par = el;
+	while (par && !par.classList.contains("post_content"))
+		par = par.parentNode;
+	var imDiv = par && par.getElementsByClassName("photo_stage_img")[0];
+	if (!imDiv || imDiv.localName !== "div") return false;
+
+	if (!imDiv.fakeImage) {
+		var cs = doc.defaultView.getComputedStyle(imDiv);
+		var bg = cs && cs.backgroundImage;
+		if (!bg) return false;
+		var r = /^url\("(.*)"\)$/.exec(bg);
+		var src = r && r[1];
+		if (!src) return false;
+
+		// Now ideally we would replace tumblr's background-image-based thingy with
+		// a real img tag. However, mimicking the exact positioning and clipping of the
+		// image is difficult and fragile, so we abuse bug 332973 instead.
+		var dummyImg = doc.createElement("img");
+		dummyImg.src = src;
+		// imDiv.parentNode.replaceChild(dummyImg, imDiv);
+		dummyImg.style.display = "none";
+		dummyImg.positionAsIf = imDiv;
+		imDiv.appendChild(dummyImg);
+		imDiv.fakeImage = dummyImg;
+	}
+
+	el.relatedTo = imDiv.fakeImage;
+	return true;
+}
+
 var CurrentHoverCancelLoadWaiters = function() {};
 function onMouseOver(chromeWin, event) {
-	var el = event.target;
+	var el = event.target, win = el.ownerDocument.defaultView;
+
+	var tumblr = (["post_controls_top", "post_tags_inner", "click_glass"].indexOf(el.className) !== -1 &&
+		win.location.href.contains("tumblr"));
+	tumblr = tumblr && setTumblrRelatedImage(el);
+
 	CurrentHoverCancelLoadWaiters();
 	if (CurrentHover) {
-		var sameTarget = (el === CurrentHover.element ||
-			(el.id && el.id.startsWith("toggleGifs")));
+		var sameTarget =
+			(el === CurrentHover.element ||
+			(el.id && el.id.startsWith("toggleGifs")) ||
+			(el.relatedTo === CurrentHover.element));
 		if (sameTarget) {
 			CurrentHover.clearTimeouts();
 			return;
@@ -343,12 +387,14 @@ function onMouseOver(chromeWin, event) {
 		clearHoverEffect();
 	}
 
-	if (el.localName !== "img")
-		return;
+	if (tumblr)
+		handleImgHover(el.relatedTo);
+	else if (el.localName === "img" && el instanceof win.HTMLElement)
+		handleImgHover(el);
+}
 
+function handleImgHover(el) {
 	var win = el.ownerDocument.defaultView;
-	if (!(el instanceof win.HTMLElement))
-		return;
 
 	try {
 		var ic = getIc(el);
@@ -358,7 +404,8 @@ function onMouseOver(chromeWin, event) {
 		// Image not loaded. Try again after a while, until mouseout or another
 		// mouseover happens and we clear the timer.
 		var to = win.setTimeout(function() {
-			onMouseOver(chromeWin, event);
+			CurrentHoverCancelLoadWaiters = function() {};
+			handleImgHover(el);
 		}, 30);
 		CurrentHoverCancelLoadWaiters = function() {
 			CurrentHoverCancelLoadWaiters = function() {};
@@ -368,12 +415,6 @@ function onMouseOver(chromeWin, event) {
 		};
 		return;
 	}
-
-	// Check that this is a content page.
-	while (win.parent && win.parent !== win)
-		win = win.parent;
-	if (win !== chromeWin.content)
-		return;
 
 	applyHoverEffect(el);
 }
