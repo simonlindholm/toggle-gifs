@@ -214,6 +214,8 @@ function applyHoverEffect(el) {
 		toggleImageAnimation: function() {
 			individuallyToggledImages.set(el.ownerDocument, el);
 			this.playing = !this.playing;
+			if (ic.animationMode === 2)
+				resetImageAnimation(el);
 			ic.animationMode = this.playing ? 0 : 1;
 			this.setPauseButtonAppearance();
 		},
@@ -234,7 +236,13 @@ function applyHoverEffect(el) {
 			try {
 				getIc(previous).animationMode = 1;
 			} catch(e) {} // dead image
-			CurrentHover.toggleImageAnimation();
+			if (Prefs.onlyOnce) {
+				individuallyToggledImages.set(el.ownerDocument, el);
+				ic.animationMode = 2;
+			}
+			else {
+				CurrentHover.toggleImageAnimation();
+			}
 		}
 	}
 
@@ -633,6 +641,7 @@ function initPrefs() {
 		enableShortcuts: true,
 		originalAnimationMode: "undefined",
 		playOnHover: false,
+		onlyOnce: false,
 		exceptForums: false,
 	};
 	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
