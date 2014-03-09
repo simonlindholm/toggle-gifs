@@ -11,3 +11,8 @@ if (el instanceof Components.interfaces.nsIImageLoadingContent) {
 ... except background images... :(
 
 Australis is enabled if ("gCustomizeMode" in window).
+
+Animation modes are:
+- 0 (kNormalAnimMode)
+- 1 (kDontAnimMode)
+- 2 (kAnimOnceMode)
