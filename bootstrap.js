@@ -373,6 +373,20 @@ function setTumblrRelatedImage(el) {
 	return true;
 }
 
+function handlePinterestHover(el) {
+	// Pinterest has their own GIF play buttons. Let them do their thing, and
+	// auto-animate the image that appears after clicking "play".
+	if (el.handled || !el.parentNode.querySelector(".playIndicatorPill.gifType"))
+		return;
+	el.handled = true;
+	var img = el.parentNode.getElementsByTagName("img")[0];
+	img.addEventListener('load', function(event) {
+		var ic = getIc(img);
+		if (ic && ic.animated)
+			ic.animationMode = 0;
+	});
+}
+
 var CurrentHoverCancelLoadWaiters = function() {};
 function onMouseOver(event) {
 	var el = event.target, win = el.ownerDocument.defaultView;
@@ -381,6 +395,11 @@ function onMouseOver(event) {
 	if (["post_controls_top", "post_tags_inner", "click_glass"].indexOf(el.className) !== -1 &&
 			win.location.host.contains("tumblr")) {
 		hasRelatedImage = setTumblrRelatedImage(el);
+	}
+
+	if (["hoverMask", "playIndicatorPill"].indexOf(el.className) !== -1 &&
+			win.location.host.contains("pinterest")) {
+		return handlePinterestHover(el);
 	}
 
 	CurrentHoverCancelLoadWaiters();
