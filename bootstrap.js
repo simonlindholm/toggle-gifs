@@ -1,5 +1,5 @@
 // WTFPL
-/*jshint unused:vars, undef:true, moz:true*/
+/*jshint unused:vars, esnext:true, undef:true, moz:true*/
 /*global Components, APP_SHUTDOWN, ADDON_DISABLE, ADDON_UNINSTALL, ADDON_DOWNGRADE*/
 /*exported startup, shutdown, install, uninstall*/
 
@@ -140,7 +140,8 @@ function resetImageAnimation(el) {
 }
 
 function resetGifsInWindow(win) {
-	// (Unfortunately this doesn't reach non-<img>s, but I don't see a way around that.)
+	// (Unfortunately this doesn't reach non-<img>s, but I don't see a way around that.
+	// Well, no reasonable way at least. See the hack for tumblr below.)
 	var els = win.document.getElementsByTagName("img"), len = els.length;
 	for (var i = 0; i < len; ++i) {
 		try {
@@ -373,12 +374,14 @@ function setTumblrRelatedImage(el) {
 }
 
 var CurrentHoverCancelLoadWaiters = function() {};
-function onMouseOver(chromeWin, event) {
+function onMouseOver(event) {
 	var el = event.target, win = el.ownerDocument.defaultView;
 
-	var tumblr = (["post_controls_top", "post_tags_inner", "click_glass"].indexOf(el.className) !== -1 &&
-		win.location.href.contains("tumblr"));
-	tumblr = tumblr && setTumblrRelatedImage(el);
+	var hasRelatedImage = false;
+	if (["post_controls_top", "post_tags_inner", "click_glass"].indexOf(el.className) !== -1 &&
+			win.location.host.contains("tumblr")) {
+		hasRelatedImage = setTumblrRelatedImage(el);
+	}
 
 	CurrentHoverCancelLoadWaiters();
 	if (CurrentHover) {
@@ -393,7 +396,7 @@ function onMouseOver(chromeWin, event) {
 		clearHoverEffect();
 	}
 
-	if (tumblr)
+	if (hasRelatedImage)
 		handleImgHover(el.relatedTo);
 	else if (el.localName === "img" && el instanceof win.HTMLElement)
 		handleImgHover(el);
@@ -449,16 +452,13 @@ function updateHoverListeners(win, shouldAdd = true) {
 	if (registeredHoverListeners.has(win) === shouldAdd)
 		return;
 	if (shouldAdd) {
-		var mouseOver = onMouseOver.bind(null, win);
-		var mouseOut = onMouseOut;
-		win.addEventListener("mouseover", mouseOver);
-		win.addEventListener("mouseout", mouseOut);
-		registeredHoverListeners.set(win, [mouseOver, mouseOut]);
+		win.addEventListener("mouseover", onMouseOver);
+		win.addEventListener("mouseout", onMouseOut);
+		registeredHoverListeners.set(win, true);
 	}
 	else {
-		var li = registeredHoverListeners.get(win);
-		win.removeEventListener("mouseover", li[0]);
-		win.removeEventListener("mouseout", li[1]);
+		win.removeEventListener("mouseover", onMouseOver);
+		win.removeEventListener("mouseout", onMouseOut);
 		registeredHoverListeners.delete(win);
 	}
 }
