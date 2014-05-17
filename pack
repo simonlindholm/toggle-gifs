@@ -1,2 +1,5 @@
 #!/bin/sh
 zip addon.zip `ls|grep -v pack|grep -v notes|grep -v temp` -rq && mv addon.zip ../toggle-gifs.xpi
+if [ -n "$EXTENSION_AUTOINSTALLER" ]; then
+	wget -q -T 3 --post-file=../toggle-gifs.xpi http://localhost:8888/
+fi
