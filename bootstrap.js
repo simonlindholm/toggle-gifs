@@ -201,7 +201,27 @@ function applyHoverEffect(el) {
 			try {
 				getIc(previous).animationMode = 1;
 			} catch(e) {} // dead image
-			CurrentHover.toggleImageAnimation();
+
+			if (Prefs.hoverPlayOnLoad && !el.complete) {
+				individuallyToggledImages.set(el.ownerDocument, el);
+				if (!el.attachedLoadWaiter) {
+					// Removing this listener on unhover or pref change is too much work. Just
+					// recheck that everything of relevance still holds true when it fires, instead.
+					el.attachedLoadWaiter = true;
+					el.addEventListener("load", function() {
+						var ic = getIc(el);
+						var prev = individuallyToggledImages.get(el.ownerDocument);
+						if (Prefs.playOnHover && Prefs.hoverPlayOnLoad && ic.animationMode === 1 && prev === el) {
+							ic.animationMode = 0;
+							if (CurrentHover)
+								CurrentHover.refresh();
+						}
+					}, true);
+				}
+			}
+			else {
+				CurrentHover.toggleImageAnimation();
+			}
 		}
 	}
 
@@ -476,6 +496,7 @@ function updateHoverListeners(win, shouldAdd = true) {
 		registeredHoverListeners.set(win, true);
 	}
 	else {
+		onMouseOut();
 		win.removeEventListener("mouseover", onMouseOver);
 		win.removeEventListener("mouseout", onMouseOut);
 		registeredHoverListeners.delete(win);
@@ -669,6 +690,7 @@ function initPrefs() {
 		enableShortcuts: true,
 		originalAnimationMode: "undefined",
 		playOnHover: false,
+		hoverPlayOnLoad: false,
 		pauseExceptions: "",
 	};
 	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
