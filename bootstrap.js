@@ -50,6 +50,8 @@ var ResetIcon =
 	"7e2tm410u3s7Kh4PH47Go3etdZe3N7evnka//pTdpxF9z+OKu4QyrEbkgAAAABJRU5ErkJg" +
 	"gg==";
 
+var HoverPause = {Never: 0, Next: 1};
+
 var ButtonsMinWidth = 60, ButtonsMinHeight = 40;
 
 var {XPCOMUtils} = Cu.import("resource://gre/modules/XPCOMUtils.jsm", {});
@@ -198,9 +200,11 @@ function applyHoverEffect(el) {
 	if (Prefs.playOnHover && !CurrentHover.playing) {
 		var previous = individuallyToggledImages.get(el.ownerDocument);
 		if (previous !== el) {
-			try {
-				getIc(previous).animationMode = 1;
-			} catch(e) {} // dead image
+			if (Prefs.hoverPauseWhen === HoverPause.Next) {
+				try {
+					getIc(previous).animationMode = 1;
+				} catch(e) {} // dead image
+			}
 
 			if (Prefs.hoverPlayOnLoad && !el.complete) {
 				individuallyToggledImages.set(el.ownerDocument, el);
@@ -211,7 +215,9 @@ function applyHoverEffect(el) {
 					el.addEventListener("load", function() {
 						var ic = getIc(el);
 						var prev = individuallyToggledImages.get(el.ownerDocument);
-						if (Prefs.playOnHover && Prefs.hoverPlayOnLoad && ic.animationMode === 1 && prev === el) {
+						if (Prefs.playOnHover && Prefs.hoverPlayOnLoad && ic.animationMode === 1 &&
+							(Prefs.hoverPauseWhen === HoverPause.Never || prev === el))
+						{
 							ic.animationMode = 0;
 							if (CurrentHover)
 								CurrentHover.refresh();
@@ -691,6 +697,7 @@ function initPrefs() {
 		originalAnimationMode: "undefined",
 		playOnHover: false,
 		hoverPlayOnLoad: false,
+		hoverPauseWhen: HoverPause.Next,
 		pauseExceptions: "",
 	};
 	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
