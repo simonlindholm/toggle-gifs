@@ -4,5 +4,6 @@
 	<setting type="bool" pref="extensions.togglegifs.toggleOnClick" title="Toggle GIFs on click" />
 	<setting type="bool" pref="extensions.togglegifs.enableShortcuts" title="Enable Ctrl+M and Shift+M shortcuts" />
 	<setting type="bool" pref="extensions.togglegifs.defaultPaused" title="Pause GIFs by default" />
+	<setting type="string" pref="extensions.togglegifs.pauseExceptions" title="– override the above setting for these sites (e.g. example.com, example.org)" />
 	<setting type="bool" pref="extensions.togglegifs.playOnHover" title="Auto-play on hover" />
 </vbox>

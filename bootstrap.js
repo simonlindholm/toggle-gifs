@@ -538,6 +538,9 @@ function startup(aData, aReason) {
 			updateHoverListeners(win, false);
 		} catch(ex) {}
 	});
+
+	maybeHookContentWindows();
+	unloaders.push(maybeHookContentWindows.bind(null, true));
 }
 
 function shutdown(aData, aReason) {
@@ -616,6 +619,48 @@ function watchWindows(callback, uncallback) {
 	});
 }
 
+var contentWindowObserver = null;
+var exceptionList = [];
+function maybeHookContentWindows(forceUnhook) {
+	function id(x) { return x; }
+	function addDot(x) { return "." + x; }
+	exceptionList = Prefs.pauseExceptions.split(/[ ,]+/).filter(id).map(addDot);
+	var shouldHook = exceptionList.length > 0 && !forceUnhook;
+	var hasObs = contentWindowObserver !== null;
+	if (shouldHook === hasObs)
+		return;
+	if (shouldHook) {
+		contentWindowObserver = {
+			QueryInterface: XPCOMUtils.generateQI([Ci.nsIObserver]),
+			observe: function contentDocumentObserve(doc, topic, data) {
+				if (topic === "document-element-inserted")
+					handleContentDocumentLoad(doc);
+			}
+		};
+		Services.obs.addObserver(contentWindowObserver, "document-element-inserted", false);
+	}
+	else {
+		Services.obs.removeObserver(contentWindowObserver, "document-element-inserted");
+		contentWindowObserver = null;
+	}
+}
+
+function handleContentDocumentLoad(doc) {
+	var win = doc.defaultView, host = doc.location && doc.location.host;
+	if (!host || !win || win.document !== doc)
+		return;
+	var list = exceptionList, loc = "." + host;
+	for (var i = 0; i < list.length; i++) {
+		if (loc.endsWith(list[i]))
+			break;
+	}
+	if (i === list.length) return;
+
+	// This site is on the exception list. Play gifs iff the default is to pause them.
+	var play = Prefs.defaultPaused;
+	setGifStateForWindow(win, play);
+}
+
 function initPrefs() {
 	var defaults = {
 		defaultPaused: false,
@@ -624,6 +669,7 @@ function initPrefs() {
 		enableShortcuts: true,
 		originalAnimationMode: "undefined",
 		playOnHover: false,
+		pauseExceptions: "",
 	};
 	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
 	var branch = Services.prefs.getBranch(PrefBranch);
@@ -694,6 +740,9 @@ function initPrefs() {
 			else if (key === "showOverlays" || key === "toggleOnClick") {
 				clearHoverEffect();
 				forAllWindows(updateHoverListeners);
+			}
+			else if (key === "pauseExceptions") {
+				maybeHookContentWindows();
 			}
 		}
 	};
