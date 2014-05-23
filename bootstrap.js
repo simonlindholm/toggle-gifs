@@ -57,6 +57,7 @@ var ButtonsMinWidth = 60, ButtonsMinHeight = 40;
 var {XPCOMUtils} = Cu.import("resource://gre/modules/XPCOMUtils.jsm", {});
 var {Services} = Cu.import("resource://gre/modules/Services.jsm", {});
 
+var AddonIsEnabled = true;
 var PrefBranch = "extensions.togglegifs.";
 var Prefs = {};
 
@@ -221,7 +222,8 @@ function applyHoverEffect(el) {
 					el.addEventListener("load", function() {
 						var ic = getIc(el);
 						var prev = individuallyToggledImages.get(el.ownerDocument);
-						if (Prefs.playOnHover && Prefs.hoverPlayOnLoad && ic.animationMode === 1 &&
+						if (AddonIsEnabled && Prefs.playOnHover && Prefs.hoverPlayOnLoad &&
+							ic.animationMode === 1 &&
 							(Prefs.hoverPauseWhen === HoverPause.Never || prev === el))
 						{
 							ic.animationMode = 0;
@@ -586,6 +588,7 @@ function startup(aData, aReason) {
 }
 
 function shutdown(aData, aReason) {
+	AddonIsEnabled = false;
 	if (aReason === APP_SHUTDOWN)
 		return;
 
