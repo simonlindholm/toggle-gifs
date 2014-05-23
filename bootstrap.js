@@ -526,11 +526,20 @@ function addKeyListener(win) {
 			var targetWin = win.content;
 			if (event.shiftKey && !event.ctrlKey && !isEditable(event.originalTarget)) {
 				iterateFrames(targetWin, resetGifsInWindow);
+
+				// We don't know whether the event will also be consumed by the web page,
+				// either on keypress or on keydown without calling preventDefault,
+				// but this is fine, since the side effect of resetting image animations
+				// is rather unnoticable. One exception to this: if find-as-you-type is
+				// enabled, cancel the event so that it doesn't activate (and pray that
+				// there is no relevant typepress event). It would really be better to
+				// do this on keypress, but then we race with FAYT. :(
+				if (Services.prefs.getBoolPref("accessibility.typeaheadfind"))
+					cancelEvent(event);
 			}
 			else if (event.ctrlKey && !event.shiftKey) {
 				iterateFrames(targetWin, toggleGifsInWindow);
-				event.stopPropagation();
-				event.preventDefault();
+				cancelEvent(event);
 			}
 		}
 	};
