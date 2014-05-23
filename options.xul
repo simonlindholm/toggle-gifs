@@ -1,11 +1,11 @@
 <?xml version="1.0"?>
 <vbox xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
-	<setting type="bool" pref="extensions.togglegifs.showOverlays" title="Display GIF controls on hover" />
-	<setting type="bool" pref="extensions.togglegifs.toggleOnClick" title="Toggle GIFs on click" />
-	<setting type="bool" pref="extensions.togglegifs.enableShortcuts" title="Enable Ctrl+M and Shift+M shortcuts" />
 	<setting type="bool" pref="extensions.togglegifs.defaultPaused" title="Pause GIFs by default" />
-	<setting type="string" pref="extensions.togglegifs.pauseExceptions" title="– override the above setting for these sites (e.g. example.com, example.org)" />
+	<setting type="string" pref="extensions.togglegifs.pauseExceptions" title="– override that setting for these sites (e.g. example.com, example.org)" />
 	<setting type="bool" pref="extensions.togglegifs.playOnHover" title="Auto-play on hover" />
 	<setting type="bool" pref="extensions.togglegifs.hoverPlayOnLoad" title="– as soon as the GIF loads" />
 	<setting type="boolint" pref="extensions.togglegifs.hoverPauseWhen" title="– and stop when hovering another GIF" on="1" off="0" />
+	<setting type="bool" pref="extensions.togglegifs.showOverlays" title="Display GIF controls on hover" />
+	<setting type="bool" pref="extensions.togglegifs.toggleOnClick" title="Toggle GIFs on click" />
+	<setting type="bool" pref="extensions.togglegifs.enableShortcuts" title="Enable Ctrl+M and Shift+M shortcuts" />
 </vbox>
