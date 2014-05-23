@@ -64,11 +64,17 @@ function getWantedGlobalAnimationMode() {
 	return Prefs.defaultPaused ? "none" : "normal";
 }
 
-// for debugging
-function log(msg) { Cu.reportError(msg); } void(log);
-
 function isLeftClick(event) {
 	return event.which === 1;
+}
+
+function isEditable(node) {
+	var doc = node.ownerDocument;
+	if (doc.designMode === "on" || node.isContentEditable)
+		return true;
+	if (["input", "textarea", "select", "object", "embed"].indexOf(node.localName) !== -1)
+		return true;
+	return false;
 }
 
 function getIc(el) {
@@ -513,18 +519,18 @@ var registeredKeyListeners = new WeakMap();
 function addKeyListener(win) {
 	if (registeredKeyListeners.has(win))
 		return;
-	var listener = function(ev) {
-		if (ev.defaultPrevented || ev.altKey)
+	var listener = function(event) {
+		if (event.defaultPrevented || event.altKey)
 			return;
-		if (ev.which === 77) { // M
+		if (event.which === 77) { // M
 			var targetWin = win.content;
-			if (ev.shiftKey && !ev.ctrlKey) {
+			if (event.shiftKey && !event.ctrlKey && !isEditable(event.originalTarget)) {
 				iterateFrames(targetWin, resetGifsInWindow);
 			}
-			else if (ev.ctrlKey && !ev.shiftKey) {
+			else if (event.ctrlKey && !event.shiftKey) {
 				iterateFrames(targetWin, toggleGifsInWindow);
-				ev.stopPropagation();
-				ev.preventDefault();
+				event.stopPropagation();
+				event.preventDefault();
 			}
 		}
 	};
