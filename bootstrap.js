@@ -402,33 +402,40 @@ function setTumblrRelatedImage(el) {
 	if (el.relatedTo)
 		return true;
 	var doc = el.ownerDocument, par = el;
-	while (par && !par.classList.contains("post_content"))
+	while (par && !(par.classList && par.classList.contains("post")))
 		par = par.parentNode;
-	var imDiv = par && par.getElementsByClassName("photo_stage_img")[0];
-	if (!imDiv || imDiv.localName !== "div") return false;
+	par = par && par.getElementsByClassName("post_content")[0];
+	var imDiv = par && (par.querySelector("div.photo_stage_img") || par.querySelector("div.post_thumbnail_container"));
+	if (imDiv) {
+		if (!imDiv.fakeImage) {
+			var cs = doc.defaultView.getComputedStyle(imDiv);
+			var bg = cs && cs.backgroundImage;
+			if (!bg) return false;
+			var r = /^url\("(.*)"\)$/.exec(bg);
+			var src = r && r[1];
+			if (!src) return false;
 
-	if (!imDiv.fakeImage) {
-		var cs = doc.defaultView.getComputedStyle(imDiv);
-		var bg = cs && cs.backgroundImage;
-		if (!bg) return false;
-		var r = /^url\("(.*)"\)$/.exec(bg);
-		var src = r && r[1];
-		if (!src) return false;
+			// Now ideally we would replace tumblr's background-image-based thingy with
+			// a real img tag. However, mimicking the exact positioning and clipping of the
+			// image is difficult and fragile, so we abuse bug 332973 instead.
+			var dummyImg = doc.createElement("img");
+			dummyImg.src = src;
+			// imDiv.parentNode.replaceChild(dummyImg, imDiv);
+			dummyImg.style.display = "none";
+			dummyImg.positionAsIf = imDiv;
+			imDiv.appendChild(dummyImg);
+			imDiv.fakeImage = dummyImg;
+		}
 
-		// Now ideally we would replace tumblr's background-image-based thingy with
-		// a real img tag. However, mimicking the exact positioning and clipping of the
-		// image is difficult and fragile, so we abuse bug 332973 instead.
-		var dummyImg = doc.createElement("img");
-		dummyImg.src = src;
-		// imDiv.parentNode.replaceChild(dummyImg, imDiv);
-		dummyImg.style.display = "none";
-		dummyImg.positionAsIf = imDiv;
-		imDiv.appendChild(dummyImg);
-		imDiv.fakeImage = dummyImg;
+		el.relatedTo = imDiv.fakeImage;
+		return true;
 	}
-
-	el.relatedTo = imDiv.fakeImage;
-	return true;
+	var img = par && par.getElementsByTagName("img")[0];
+	if (img) {
+		el.relatedTo = img;
+		return true;
+	}
+	return false;
 }
 
 function handlePinterestHover(el) {
@@ -448,17 +455,16 @@ function handlePinterestHover(el) {
 var CurrentHoverCancelLoadWaiters = function() {};
 function onMouseOver(event) {
 	var el = event.target, win = el.ownerDocument.defaultView;
+	var host = win.location.host, cl = el.className;
 
 	var hasRelatedImage = false;
-	if (["post_controls_top", "post_tags_inner", "click_glass"].indexOf(el.className) !== -1 &&
-			win.location.host.contains("tumblr")) {
+	if (host.contains("tumblr") && ["post_controls_top", "post_tags_inner", "click_glass",
+			"hover", "hover_inner", "post_date", "post_notes"].indexOf(cl) !== -1) {
 		hasRelatedImage = setTumblrRelatedImage(el);
 	}
 
-	if (["hoverMask", "playIndicatorPill"].indexOf(el.className) !== -1 &&
-			win.location.host.contains("pinterest")) {
+	if (host.contains("pinterest") && (cl === "hoverMask" || cl === "playIndicatorPill"))
 		return handlePinterestHover(el);
-	}
 
 	CurrentHoverCancelLoadWaiters();
 	if (CurrentHover) {
