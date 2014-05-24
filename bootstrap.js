@@ -69,6 +69,30 @@ function isLeftClick(event) {
 	return event.which === 1;
 }
 
+function keyDownEventToString(event) {
+	function keyToString(event) {
+		if (event.which === 27)
+			return "Esc";
+		if (event.which === 32)
+			return "Space";
+		if (event.which < 32)
+			return null;
+		var key = event.key || String.fromCharCode(event.which);
+		return (key.length === 1 ? key.toUpperCase() : key);
+	}
+	function accelToString(event) {
+		var accel = "";
+		if (event.ctrlKey) accel += "Ctrl+";
+		if (event.metaKey) accel += "Meta+";
+		if (event.shiftKey) accel += "Shift+";
+		if (event.altKey) accel += "Alt+";
+		return accel;
+	}
+
+	var key = keyToString(event), accel = accelToString(event);
+	return key ? accel + key : "";
+}
+
 function isEditable(node) {
 	var doc = node.ownerDocument;
 	if (doc.designMode === "on" || node.isContentEditable)
@@ -518,42 +542,59 @@ function updateHoverListeners(win, shouldAdd = true) {
 }
 
 var registeredKeyListeners = new WeakMap();
-function addKeyListener(win) {
-	if (registeredKeyListeners.has(win))
+function updateKeyListener(win, forceRemove) {
+	var shouldAdd = (Prefs.shortcutToggle || Prefs.shortcutReset) && !forceRemove;
+	if (registeredKeyListeners.has(win) === shouldAdd)
 		return;
-	var listener = function(event) {
-		if (event.defaultPrevented || event.altKey)
-			return;
-		if (event.which === 77) { // M
-			var targetWin = win.content;
-			if (event.shiftKey && !event.ctrlKey && !isEditable(event.originalTarget)) {
-				iterateFrames(targetWin, resetGifsInWindow);
 
-				// We don't know whether the event will also be consumed by the web page,
-				// either on keypress or on keydown without calling preventDefault,
-				// but this is fine, since the side effect of resetting image animations
-				// is rather unnoticable. One exception to this: if find-as-you-type is
-				// enabled, cancel the event so that it doesn't activate (and pray that
-				// there is no relevant typepress event). It would really be better to
-				// do this on keypress, but then we race with FAYT. :(
-				if (Services.prefs.getBoolPref("accessibility.typeaheadfind"))
-					cancelEvent(event);
+	if (shouldAdd) {
+		let listener = function(event) {
+			if (event.defaultPrevented)
+				return;
+			var str = keyDownEventToString(event);
+			if (!str || !(str === Prefs.shortcutToggle || str === Prefs.shortcutReset))
+				return;
+
+			var shouldCancel = true;
+			if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+				// This is a bit precarious. We don't know whether the event will also be
+				// consumed by the web page (either on keypress or on keydown without
+				// calling preventDefault), and since the key binding doesn't include a
+				// modifier key we also don't want to claim exclusive ownership of it.
+				// First of all, if we are focusing an editable control, we should clearly
+				// not handle the event:
+				if (isEditable(event.originalTarget))
+					return;
+
+				// Otherwise, it seems pretty unlikely that the web page would care about
+				// the event, but if it does, it's probably part of primary UI which is
+				// important that it continues working. So we don't want to cancel the
+				// event. Since toggling/resetting image animations is rather harmless
+				// (and unnoticable unless there are GIFs visible), we can get around the
+				// problem by consuming the event, but not calling preventDefault().
+				// One exception to this: if find-as-you-type is enabled, we do cancel
+				// events (and pray that there are no relevant keypress listeners).
+				// It would be better to do all this on keypress, but then we race with FAYT. :(
+				shouldCancel = Services.prefs.getBoolPref("accessibility.typeaheadfind");
 			}
-			else if (event.ctrlKey && !event.shiftKey) {
-				iterateFrames(targetWin, toggleGifsInWindow);
+
+			if (str === Prefs.shortcutToggle)
+				iterateFrames(win.content, toggleGifsInWindow);
+
+			if (str === Prefs.shortcutReset)
+				iterateFrames(win.content, resetGifsInWindow);
+
+			if (shouldCancel)
 				cancelEvent(event);
-			}
-		}
-	};
-
-	registeredKeyListeners.set(win, listener);
-	win.addEventListener("keydown", listener);
-}
-function removeKeyListener(win) {
-	var listener = registeredKeyListeners.get(win);
-	if (listener)
+		};
+		registeredKeyListeners.set(win, listener);
+		win.addEventListener("keydown", listener);
+	}
+	else {
+		let listener = registeredKeyListeners.get(win);
 		win.removeEventListener("keydown", listener);
-	registeredKeyListeners.delete(win);
+		registeredKeyListeners.delete(win);
+	}
 }
 
 var unloaders = [];
@@ -569,15 +610,13 @@ function startup(aData, aReason) {
 	// Hook into all browser windows, current and future.
 	watchWindows(function togglegif_load(win) {
 		try {
-			if (Prefs.enableShortcuts)
-				addKeyListener(win);
+			updateKeyListener(win);
 			updateHoverListeners(win);
 		} catch(ex) {}
 	},
 	function togglegif_unload(win) {
 		try {
-			if (Prefs.enableShortcuts)
-				removeKeyListener(win);
+			updateKeyListener(win, true);
 			clearHoverEffect();
 			updateHoverListeners(win, false);
 		} catch(ex) {}
@@ -706,17 +745,33 @@ function handleContentDocumentLoad(doc) {
 	setGifStateForWindow(win, play);
 }
 
+function handleShortcutKeyDown(event) {
+	if (event.which === 8) {
+		// Clear on backspace.
+		this.value = "";
+	}
+	else {
+		var str = keyDownEventToString(event);
+		if (!str)
+			return;
+		this.value = str;
+	}
+	this.inputChanged();
+	cancelEvent(event);
+}
+
 function initPrefs() {
 	var defaults = {
 		defaultPaused: false,
 		showOverlays: true,
 		toggleOnClick: false,
-		enableShortcuts: true,
 		originalAnimationMode: "undefined",
 		playOnHover: false,
 		hoverPlayOnLoad: false,
 		hoverPauseWhen: HoverPause.Next,
 		pauseExceptions: "",
+		shortcutToggle: "Ctrl+M",
+		shortcutReset: "Shift+M",
 	};
 	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
 	var branch = Services.prefs.getBranch(PrefBranch);
@@ -771,6 +826,12 @@ function initPrefs() {
 		}
 	}
 
+	if (branch.getPrefType("enableShortcuts") && !branch.getBoolPref("enableShortcuts")) {
+		branch.setBoolPref("enableShortcuts", true);
+		setOwnPref("shortcutToggle", "");
+		setOwnPref("shortcutReset", "");
+	}
+
 	var prefWatcher = {
 		observe: function(subject, topic, key) {
 			if (topic !== "nsPref:changed")
@@ -781,8 +842,8 @@ function initPrefs() {
 				// Don't do anything else; this should just affect later page loads.
 				Services.prefs.setCharPref("image.animation_mode", getWantedGlobalAnimationMode());
 			}
-			else if (key === "enableShortcuts") {
-				forAllWindows(Prefs[key] ? addKeyListener : removeKeyListener);
+			else if (key === "shortcutToggle" || key === "shortcutReset") {
+				forAllWindows(updateKeyListener);
 			}
 			else if (key === "showOverlays" || key === "toggleOnClick") {
 				clearHoverEffect();
@@ -797,5 +858,26 @@ function initPrefs() {
 	branch.addObserver("", prefWatcher, false);
 	unloaders.push(function() {
 		branch.removeObserver("", prefWatcher);
+	});
+
+	var uiObserver = {
+		observe: function(subject, topic, data) {
+			if (data === "giftoggle@simonsoftware.se") {
+				var doc = subject;
+				for (let el of doc.getElementsByClassName("togglegifs-shortcut")) {
+					if (topic === "addon-options-displayed")
+						el.addEventListener("keydown", handleShortcutKeyDown);
+					else if (topic === "addon-options-hidden")
+						el.removeEventListener("keydown", handleShortcutKeyDown);
+				}
+			}
+		}
+	};
+
+	Services.obs.addObserver(uiObserver, "addon-options-displayed", false);
+	Services.obs.addObserver(uiObserver, "addon-options-hidden", false);
+	unloaders.push(function() {
+		Services.obs.removeObserver(uiObserver, "addon-options-displayed");
+		Services.obs.removeObserver(uiObserver, "addon-options-hidden");
 	});
 }

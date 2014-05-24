@@ -7,5 +7,6 @@
 	<setting type="boolint" pref="extensions.togglegifs.hoverPauseWhen" title="– and stop when hovering another GIF" on="1" off="0" />
 	<setting type="bool" pref="extensions.togglegifs.showOverlays" title="Display GIF controls on hover" />
 	<setting type="bool" pref="extensions.togglegifs.toggleOnClick" title="Toggle GIFs on click" />
-	<setting type="bool" pref="extensions.togglegifs.enableShortcuts" title="Enable Ctrl+M and Shift+M shortcuts" />
+	<setting type="string" pref="extensions.togglegifs.shortcutToggle" title="Shortcut for toggling GIFs" class="togglegifs-shortcut" />
+	<setting type="string" pref="extensions.togglegifs.shortcutReset" title="Shortcut for resetting GIFs" class="togglegifs-shortcut" />
 </vbox>
