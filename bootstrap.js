@@ -77,7 +77,11 @@ function keyDownEventToString(event) {
 			return "Space";
 		if (event.which < 32)
 			return null;
-		var key = event.key || String.fromCharCode(event.which);
+		var key = event.key;
+		// Firefox 24 shows MozPrintableKey for all printable keys...
+		// http://lists.w3.org/Archives/Public/www-dom/2013AprJun/0079.html
+		if (!key || key === "MozPrintableKey")
+			key = String.fromCharCode(event.which);
 		return (key.length === 1 ? key.toUpperCase() : key);
 	}
 	function accelToString(event) {
