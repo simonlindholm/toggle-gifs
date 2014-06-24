@@ -71,6 +71,8 @@ function isLeftClick(event) {
 
 function keyDownEventToString(event) {
 	function keyToString(event) {
+		if (event.which === 19)
+			return "Pause";
 		if (event.which === 27)
 			return "Esc";
 		if (event.which === 32)
