@@ -50,7 +50,7 @@ var ResetIcon =
 	"7e2tm410u3s7Kh4PH47Go3etdZe3N7evnka//pTdpxF9z+OKu4QyrEbkgAAAABJRU5ErkJg" +
 	"gg==";
 
-var HoverPause = {Never: 0, Next: 1};
+var HoverPause = {Never: 0, Next: 1, Unhover: 2, ClickOutside: 3};
 
 var ButtonsMinWidth = 60, ButtonsMinHeight = 40;
 
@@ -198,9 +198,15 @@ function clearHoverEffect() {
 		CurrentHover.clearTimeouts();
 		if (CurrentHover.overlay && CurrentHover.overlay.parentNode)
 			CurrentHover.overlay.parentNode.removeChild(CurrentHover.overlay);
-		CurrentHover.element.removeEventListener("mousedown", onImageMouseDown);
 		if (CurrentHover.mo)
 			CurrentHover.mo.disconnect();
+		var el = CurrentHover.element;
+		el.removeEventListener("mousedown", onImageMouseDown);
+		if (Prefs.hoverPauseWhen === HoverPause.Unhover && CurrentHover.playing &&
+				individuallyToggledImages.get(el.ownerDocument) === el) {
+			individuallyToggledImages.delete(el.ownerDocument);
+			getIc(el).animationMode = 1;
+		}
 	} catch (ex) {} // dead wrapper exceptions
 	CurrentHover = null;
 }
@@ -458,6 +464,12 @@ function handlePinterestHover(el) {
 	});
 }
 
+function partOfHoverTarget(el) {
+	return CurrentHover && (el === CurrentHover.element ||
+		el.relatedTo === CurrentHover.element ||
+		(el.id && el.id.startsWith("toggleGifs")));
+}
+
 var CurrentHoverCancelLoadWaiters = function() {};
 function onMouseOver(event) {
 	var el = event.target, win = el.ownerDocument.defaultView;
@@ -474,11 +486,7 @@ function onMouseOver(event) {
 
 	CurrentHoverCancelLoadWaiters();
 	if (CurrentHover) {
-		var sameTarget =
-			(el === CurrentHover.element ||
-			(el.id && el.id.startsWith("toggleGifs")) ||
-			(el.relatedTo === CurrentHover.element));
-		if (sameTarget) {
+		if (partOfHoverTarget(el)) {
 			CurrentHover.clearTimeouts();
 			return;
 		}
@@ -553,6 +561,29 @@ function updateHoverListeners(win, shouldAdd = true) {
 	}
 }
 
+function onClick(event) {
+	var el = event.target, win = el.ownerDocument.defaultView;
+	if (CurrentHover)
+		return;
+	individuallyToggledImages.delete(win.document);
+	setGifStateForWindow(win, false);
+}
+
+var registeredClickListeners = new WeakMap();
+function updateClickListeners(win, forceRemove) {
+	var shouldAdd = (Prefs.hoverPauseWhen === HoverPause.ClickOutside) && !forceRemove;
+	if (registeredClickListeners.has(win) === shouldAdd)
+		return;
+	if (shouldAdd) {
+		win.addEventListener("click", onClick);
+		registeredClickListeners.set(win, true);
+	}
+	else {
+		win.removeEventListener("click", onClick);
+		registeredClickListeners.delete(win);
+	}
+}
+
 var registeredKeyListeners = new WeakMap();
 function updateKeyListener(win, forceRemove) {
 	var shouldAdd = (Prefs.shortcutToggle || Prefs.shortcutReset) && !forceRemove;
@@ -624,11 +655,13 @@ function startup(aData, aReason) {
 		try {
 			updateKeyListener(win);
 			updateHoverListeners(win);
+			updateClickListeners(win);
 		} catch(ex) {}
 	},
 	function togglegif_unload(win) {
 		try {
 			updateKeyListener(win, true);
+			updateClickListeners(win, true);
 			clearHoverEffect();
 			updateHoverListeners(win, false);
 		} catch(ex) {}
@@ -860,6 +893,9 @@ function initPrefs() {
 			else if (key === "showOverlays" || key === "toggleOnClick") {
 				clearHoverEffect();
 				forAllWindows(updateHoverListeners);
+			}
+			else if (key === "hoverPauseWhen") {
+				forAllWindows(updateClickListeners);
 			}
 			else if (key === "pauseExceptions") {
 				maybeHookContentWindows();

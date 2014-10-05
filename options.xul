@@ -4,7 +4,14 @@
 	<setting type="string" pref="extensions.togglegifs.pauseExceptions" title="– override that setting for these sites (e.g. example.com, example.org)" />
 	<setting type="bool" pref="extensions.togglegifs.playOnHover" title="Auto-play on hover" />
 	<setting type="bool" pref="extensions.togglegifs.hoverPlayOnLoad" title="– as soon as the GIF loads" />
-	<setting type="boolint" pref="extensions.togglegifs.hoverPauseWhen" title="– and stop when hovering another GIF" on="1" off="0" />
+	<setting pref="extensions.togglegifs.hoverPauseWhen" type="radio" title="– and stop again when:">
+		<radiogroup>
+			<radio value="0" label="never"/>
+			<radio value="1" label="hovering another GIF"/>
+			<radio value="2" label="unhovering"/>
+			<radio value="3" label="clicking outside"/>
+		</radiogroup>
+	</setting>
 	<setting type="bool" pref="extensions.togglegifs.showOverlays" title="Display GIF controls on hover" />
 	<setting type="bool" pref="extensions.togglegifs.toggleOnClick" title="Toggle GIFs on click" />
 	<setting type="string" pref="extensions.togglegifs.shortcutToggle" title="Shortcut for toggling GIFs" class="togglegifs-shortcut" />
