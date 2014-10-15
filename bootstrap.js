@@ -774,20 +774,31 @@ function maybeHookContentWindows(forceUnhook) {
 	}
 }
 
-function handleContentDocumentLoad(doc) {
-	var win = doc.defaultView, host = doc.location && doc.location.host;
-	if (!host || !win || win.document !== doc)
-		return;
-	var list = exceptionList, loc = "." + host;
-	for (var i = 0; i < list.length; i++) {
-		if (loc.endsWith(list[i]))
-			break;
+function locationOnExceptionList(loc) {
+	var host = loc.host, list = exceptionList, i;
+	if (host) {
+		var suffixLoc = "." + host;
+		for (i = 0; i < list.length; i++) {
+			if (suffixLoc.endsWith(list[i]))
+				return true;
+		}
 	}
-	if (i === list.length) return;
+	var prefixLoc = "." + loc.href + "/";
+	for (i = 0; i < list.length; i++) {
+		if (prefixLoc.startsWith(list[i]))
+			return true;
+	}
+	return false;
+}
 
-	// This site is on the exception list. Play gifs iff the default is to pause them.
-	var play = Prefs.defaultPaused;
-	setGifStateForWindow(win, play);
+function handleContentDocumentLoad(doc) {
+	var win = doc.defaultView, loc = doc.location;
+	if (loc && win && win.document === doc && loc.protocol !== "data:" &&
+			locationOnExceptionList(loc)) {
+		// This site is on the exception list. Play gifs iff the default is to pause them.
+		var play = Prefs.defaultPaused;
+		setGifStateForWindow(win, play);
+	}
 }
 
 function handleShortcutKeyDown(event) {
