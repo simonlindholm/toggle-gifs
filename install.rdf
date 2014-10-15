@@ -4,8 +4,9 @@
         <em:id>giftoggle@simonsoftware.se</em:id>
         <em:type>2</em:type>
         <em:name>Toggle animated GIFs</em:name>
-        <em:version>1.2.1</em:version>
+        <em:version>1.2.2</em:version>
         <em:bootstrap>true</em:bootstrap>
+        <em:multiprocessCompatible>true</em:multiprocessCompatible>
         <em:creator>Simon Lindholm</em:creator>
         <em:optionsType>2</em:optionsType>
         <!-- Firefox for Desktop -->
