@@ -117,14 +117,39 @@ function getDwu(win) {
 }
 
 function getIc(el) {
+	if (isGifv(el)) {
+		return {
+			animated: true,
+			get animationMode() {
+				return el.paused ? 1 : 0;
+			},
+			set animationMode(state) {
+				if (state === 0)
+					el.play();
+				else
+					el.pause();
+			},
+			resetAnimation: function() {
+				el.currentTime = 0;
+			}
+		};
+	}
 	if (el instanceof Ci.nsIImageLoadingContent)
 		return el.getRequest(Ci.nsIImageLoadingContent.CURRENT_REQUEST).image;
 	return null;
 }
 
 function setGifStateForWindow(win, playing) {
-	// Like above.
-	try { getDwu(win).imageAnimationMode = playing ? 0 : 1; } catch (ex) {}
+	try {
+		getDwu(win).imageAnimationMode = playing ? 0 : 1;
+
+		var videos = win.document.getElementsByTagName("video");
+		for (var i = 0, len = videos.length; i < len; ++i) {
+			var ic = getIc(videos[i]);
+			if (ic && ic.animated)
+				ic.animationMode = playing ? 0 : 1;
+		}
+	} catch (ex) {} // missing presContexts and so on
 }
 
 function resetImageAnimation(el) {
@@ -148,7 +173,7 @@ function hasEventListenerOfType(el, type) {
 }
 
 function hasLoaded(el) {
-	return el.complete;
+	return isGifv(el) || el.complete;
 }
 
 function inViewport(win, el) {
@@ -158,11 +183,19 @@ function inViewport(win, el) {
 	if (win.getComputedStyle(el).display === "none")
 		return false;
 	var re = el.getClientRects()[0];
-	return (re.bottom >= 0 && re.top <= win.innerHeight);
+	return (re && re.bottom > 0 && re.top < win.innerHeight);
 }
 
 function isLeftClick(event) {
 	return event.which === 1;
+}
+
+function isGifv(el) {
+	if (el.localName !== "video" || el.hasAttribute("controls"))
+		return false;
+	if (el.id === "mainVid0" || el.classList.contains("gfyVid")) // gfycat
+		return true;
+	return el.hasAttribute("muted") && el.hasAttribute("loop") && el.hasAttribute("autoplay");
 }
 
 function isEditable(node) {
@@ -215,6 +248,7 @@ function resetGifsInWindow(win) {
 		}
 	}
 	resetList(win.document.getElementsByTagName("img"));
+	resetList(win.document.getElementsByTagName("video"));
 }
 
 function toggleGifsInWindow(win) {
@@ -386,6 +420,7 @@ function clearHoverEffect() {
 function applyHoverEffect(el) {
 	var doc = el.ownerDocument, win = doc.defaultView;
 	var ic = getIc(el);
+	initGifvState(el);
 
 	CurrentHover = {
 		element: el,
@@ -608,7 +643,7 @@ function onMouseOver(event) {
 
 	if (hasRelatedImage)
 		handleImgHover(el.relatedTo);
-	else if (el.localName === "img" && el instanceof win.HTMLElement)
+	else if ((el.localName === "img" || isGifv(el)) && el instanceof win.HTMLElement)
 		handleImgHover(el);
 }
 
@@ -670,6 +705,28 @@ function updateHoverListeners(forceRemove) {
 	}
 }
 
+// ==== Load listeners ====
+
+function initGifvState(el) {
+	if (!isGifv(el) || el.initedGifv)
+		return;
+	el.initedGifv = true;
+
+	if (Prefs.defaultPaused)
+		getIc(el).animationMode = 1;
+}
+
+function onLoadedMetadata(event) {
+	initGifvState(event.target);
+}
+
+function updateLoadListeners(forceRemove) {
+	if (!forceRemove)
+		addEventListener("loadedmetadata", onLoadedMetadata, true);
+	else
+		removeEventListener("loadedmetadata", onLoadedMetadata, true);
+}
+
 // === Signals ===
 
 var MMPrefix = Components.stack.filename + ":";
@@ -687,7 +744,6 @@ addSignal("update-pref", function(msg) {
 	var key = msg.data.key, value = msg.data.value;
 	Prefs[key] = value;
 	if (key === "showOverlays" || key === "toggleOnClick") {
-		clearHoverEffect();
 		updateHoverListeners();
 	}
 	else if (key === "hoverPauseWhen") {
@@ -705,6 +761,7 @@ addSignal("destroy", function() {
 	updateKeyListeners(true);
 	updateClickListeners(true);
 	updateHoverListeners(true);
+	updateLoadListeners(true);
 	maybeHookContentWindows(true);
 });
 
@@ -714,6 +771,7 @@ function init() {
 	updateKeyListeners();
 	updateClickListeners();
 	updateHoverListeners();
+	updateLoadListeners();
 	maybeHookContentWindows();
 }
 init();
