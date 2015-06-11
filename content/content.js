@@ -66,6 +66,38 @@ var HoverPause = {Never: 0, Next: 1, Unhover: 2, ClickOutside: 3};
 
 var ButtonsMinWidth = 60, ButtonsMinHeight = 40;
 
+var OverlayCss = [
+	"#toggleGifsOverlay, #toggleGifsOverlay * {",
+		"all: initial;", // Fx27+
+		"border: none !important;",
+		"margin: 0 !important;",
+		"padding: 0 !important;",
+		"-moz-box-sizing: content-box !important;",
+	"}",
+	"#toggleGifsOverlay > style {",
+		"display: none !important;",
+	"}",
+	"#toggleGifsOverlay {",
+		"position: absolute !important;",
+		"z-index: 2147483647 !important;",
+	"}",
+	"#toggleGifsOverlay > #toggleGifsContent {",
+		"position: absolute !important;",
+		"top: 0 !important;",
+		"right: 0 !important;",
+		"text-align: right !important;",
+		"white-space: nowrap !important;",
+	"}",
+	"#toggleGifsResetButton, #toggleGifsPauseButton {",
+		"width: 24px !important;",
+		"height: 25px !important;",
+		"display: inline-block !important;",
+		"background-repeat: no-repeat !important;",
+		"background-position: 0 3px !important;",
+		"cursor: pointer !important;",
+	"}",
+].join("\n");
+
 // === Global state ===
 
 // It would be okay to have this per document, but I'm lazy.
@@ -115,6 +147,20 @@ function hasEventListenerOfType(el, type) {
 	return false;
 }
 
+function hasLoaded(el) {
+	return el.complete;
+}
+
+function inViewport(win, el) {
+	el = el.positionAsIf || el;
+	if (el.ownerDocument !== win.document || !win.document.contains(el))
+		return false;
+	if (win.getComputedStyle(el).display === "none")
+		return false;
+	var re = el.getClientRects()[0];
+	return (re.bottom >= 0 && re.top <= win.innerHeight);
+}
+
 function isLeftClick(event) {
 	return event.which === 1;
 }
@@ -161,41 +207,34 @@ function updateClickListeners(forceRemove) {
 function resetGifsInWindow(win) {
 	// (Unfortunately this doesn't reach non-<img>s, but I don't see a way around that.
 	// Well, no reasonable way at least. See the hack for tumblr below.)
-	var els = win.document.getElementsByTagName("img"), len = els.length;
-	for (var i = 0; i < len; ++i) {
-		try {
-			resetImageAnimation(els[i]);
-		} catch (ex) {} // not loaded
+	function resetList(els) {
+		for (var i = 0, len = els.length; i < len; ++i) {
+			try {
+				resetImageAnimation(els[i]);
+			} catch (ex) {} // not loaded
+		}
 	}
+	resetList(win.document.getElementsByTagName("img"));
 }
 
 function toggleGifsInWindow(win) {
 	try {
-		var dwu = getDwu(win);
-		var curState = dwu.imageAnimationMode;
+		var curState = getDwu(win).imageAnimationMode;
 
 		// If we've toggled an individual image, and it's still in the viewport,
 		// go by that instead of by the global animation mode.
-		var el = individuallyToggledImages.get(win.document);
-		if (el) {
-			try {
-				var offsetBase = el.positionAsIf || el;
-				if (offsetBase.ownerDocument === win.document && win.document.contains(offsetBase) &&
-					win.getComputedStyle(offsetBase).display !== "none")
-				{
-					var re = offsetBase.getClientRects()[0];
-					if (re.bottom >= 0 && re.top <= win.innerHeight) {
-						var ic = getIc(el);
-						if (ic && ic.animated)
-							curState = ic.animationMode;
-					}
-				}
-			} catch (ex) {
-				// The image state has changed somehow. The default behavior will do.
+		try {
+			var el = individuallyToggledImages.get(win.document);
+			if (el && inViewport(win, el)) {
+				var ic = getIc(el);
+				if (ic && ic.animated)
+					curState = ic.animationMode;
 			}
+		} catch (ex) {
+			// The image state has changed somehow. The default behavior will do.
 		}
 
-		dwu.imageAnimationMode = (curState === 1 ? 0 : 1);
+		setGifStateForWindow(win, curState === 1);
 		if (CurrentHover)
 			CurrentHover.refresh();
 	} catch (ex) {
@@ -383,7 +422,7 @@ function applyHoverEffect(el) {
 				} catch(e) {} // dead image
 			}
 
-			if (Prefs.hoverPlayOnLoad && !el.complete) {
+			if (Prefs.hoverPlayOnLoad && !hasLoaded(el)) {
 				individuallyToggledImages.set(el.ownerDocument, el);
 				if (!el.attachedLoadWaiter) {
 					// Removing this listener on unhover or pref change is too much work. Just
@@ -420,37 +459,7 @@ function applyHoverEffect(el) {
 	overlay.id = "toggleGifsOverlay";
 
 	var css = doc.createElement("style");
-	css.textContent = [
-		"#toggleGifsOverlay, #toggleGifsOverlay * {",
-			"all: initial;", // Fx27+
-			"border: none !important;",
-			"margin: 0 !important;",
-			"padding: 0 !important;",
-			"-moz-box-sizing: content-box !important;",
-		"}",
-		"#toggleGifsOverlay > style {",
-			"display: none !important;",
-		"}",
-		"#toggleGifsOverlay {",
-			"position: absolute !important;",
-			"z-index: 2147483647 !important;",
-		"}",
-		"#toggleGifsOverlay > #toggleGifsContent {",
-			"position: absolute !important;",
-			"top: 0 !important;",
-			"right: 0 !important;",
-			"text-align: right !important;",
-			"white-space: nowrap !important;",
-		"}",
-		"#toggleGifsResetButton, #toggleGifsPauseButton {",
-			"width: 24px !important;",
-			"height: 25px !important;",
-			"display: inline-block !important;",
-			"background-repeat: no-repeat !important;",
-			"background-position: 0 3px !important;",
-			"cursor: pointer !important;",
-		"}",
-	].join("\n");
+	css.textContent = OverlayCss;
 	overlay.appendChild(css);
 
 	// TODO: All these listeners should be capturing and registered on the document.
