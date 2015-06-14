@@ -11,13 +11,8 @@ var Cc = Components.classes;
 var Cu = Components.utils;
 var Ci = Components.interfaces;
 
-var {XPCOMUtils} = Cu.import("resource://gre/modules/XPCOMUtils.jsm", {});
-
 var elService = Cc["@mozilla.org/eventlistenerservice;1"]
 	.getService(Ci.nsIEventListenerService);
-
-var obsService = Cc["@mozilla.org/observer-service;1"]
-	.getService(Ci.nsIObserverService);
 
 var prefService = Cc["@mozilla.org/preferences-service;1"]
 	.getService(Ci.nsIPrefBranch);
@@ -346,7 +341,7 @@ function locationOnExceptionList(loc) {
 }
 
 function handleContentDocumentLoad(doc) {
-	var win = doc.defaultView, loc = doc.location;
+	var win = doc && doc.defaultView, loc = doc && doc.location;
 	if (loc && win && win.document === doc && loc.protocol !== "data:" &&
 			locationOnExceptionList(loc)) {
 		// This site is on the exception list. Play gifs iff the default is to pause them.
@@ -355,28 +350,25 @@ function handleContentDocumentLoad(doc) {
 	}
 }
 
-var contentWindowObserver = null;
-function maybeHookContentWindows(forceUnhook) {
+function onDOMWindowCreated(ev) {
+	handleContentDocumentLoad(ev.target);
+}
+
+function maybeHookContentWindows(forceUnhook, initial) {
 	function id(x) { return x; }
 	function addDot(x) { return "." + x; }
 	exceptionList = Prefs.pauseExceptions.split(/[ ,]+/).filter(id).map(addDot);
 	var shouldHook = exceptionList.length > 0 && !forceUnhook;
-	var hasObs = contentWindowObserver !== null;
-	if (shouldHook === hasObs)
-		return;
-	if (shouldHook) {
-		contentWindowObserver = {
-			QueryInterface: XPCOMUtils.generateQI([Ci.nsIObserver]),
-			observe: function contentDocumentObserve(doc, topic) {
-				if (topic === "document-element-inserted")
-					handleContentDocumentLoad(doc);
-			}
-		};
-		obsService.addObserver(contentWindowObserver, "document-element-inserted", false);
-	}
-	else {
-		obsService.removeObserver(contentWindowObserver, "document-element-inserted");
-		contentWindowObserver = null;
+	if (shouldHook)
+		addEventListener("DOMWindowCreated", onDOMWindowCreated);
+	else
+		removeEventListener("DOMWindowCreated", onDOMWindowCreated);
+
+	if (shouldHook && initial && content) {
+		// Iterate over the ones we missed initially.
+		iterateFrames(content, function(w) {
+			handleContentDocumentLoad(w.document);
+		});
 	}
 }
 
@@ -767,12 +759,18 @@ addSignal("destroy", function() {
 
 function init() {
 	var ret = sendSyncMessage(MMPrefix + "browser-init")[0];
+	if (!ret) {
+		// Sometimes we get disconnected from the parent. Just abort in this case.
+		// (This sometimes also happens silently; we simply stop getting signals.
+		// But it should be fine in our case, hopefully...)
+		return;
+	}
 	Prefs = ret.prefs;
 	updateKeyListeners();
 	updateClickListeners();
 	updateHoverListeners();
 	updateLoadListeners();
-	maybeHookContentWindows();
+	maybeHookContentWindows(false, true);
 }
 init();
 

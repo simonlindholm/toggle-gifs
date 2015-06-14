@@ -84,8 +84,8 @@ function shutdown(data, reason) {
 			.setCharPref("originalAnimationMode", "undefined");
 	}
 
-	dispatch("destroy");
 	globalMM.removeDelayedFrameScript(frameScriptUrl);
+	dispatch("destroy");
 	Cu.unload("chrome://toggle-gifs/content/common.jsm");
 }
 
