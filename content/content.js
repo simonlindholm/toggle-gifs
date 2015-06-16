@@ -101,6 +101,14 @@ var individuallyToggledImages = new WeakMap();
 var AddonIsEnabled = true;
 var Prefs = null;
 
+// === Expando symbols ===
+
+var eAttachedLoadWaiter = "toggleGifs-attachedLoadWaiter";
+var eRelatedTo = "toggleGifs-relatedTo";
+var eFakeImage = "toggleGifs-fakeImage";
+var eHandledPinterest = "toggleGifs-handledPinterest";
+var ePositionAsIf = "toggleGifs-positionAsIf";
+
 // === Helpers ===
 
 var {cancelEvent, keyDownEventToString} =
@@ -172,7 +180,7 @@ function hasLoaded(el) {
 }
 
 function inViewport(win, el) {
-	el = el.positionAsIf || el;
+	el = el[ePositionAsIf] || el;
 	if (el.ownerDocument !== win.document || !win.document.contains(el))
 		return false;
 	if (win.getComputedStyle(el).display === "none")
@@ -451,10 +459,10 @@ function applyHoverEffect(el) {
 
 			if (Prefs.hoverPlayOnLoad && !hasLoaded(el)) {
 				individuallyToggledImages.set(el.ownerDocument, el);
-				if (!el.attachedLoadWaiter) {
+				if (!el[eAttachedLoadWaiter]) {
 					// Removing this listener on unhover or pref change is too much work. Just
 					// recheck that everything of relevance still holds true when it fires, instead.
-					el.attachedLoadWaiter = true;
+					el[eAttachedLoadWaiter] = true;
 					el.addEventListener("load", function() {
 						var ic = getIc(el);
 						var prev = individuallyToggledImages.get(el.ownerDocument);
@@ -478,7 +486,7 @@ function applyHoverEffect(el) {
 	if (!Prefs.showOverlays)
 		return;
 
-	var offsetBase = el.positionAsIf || el;
+	var offsetBase = el[ePositionAsIf] || el;
 	if (offsetBase.offsetWidth < ButtonsMinWidth || offsetBase.offsetHeight < ButtonsMinHeight)
 		return;
 
@@ -551,7 +559,7 @@ function applyHoverEffect(el) {
 }
 
 function setTumblrRelatedImage(el) {
-	if (el.relatedTo)
+	if (el[eRelatedTo])
 		return true;
 	var doc = el.ownerDocument, par = el;
 	while (par && !(par.classList && par.classList.contains("post")))
@@ -559,7 +567,7 @@ function setTumblrRelatedImage(el) {
 	par = par && par.getElementsByClassName("post_content")[0];
 	var imDiv = par && (par.querySelector("div.photo_stage_img") || par.querySelector("div.post_thumbnail_container"));
 	if (imDiv) {
-		if (!imDiv.fakeImage) {
+		if (!imDiv[eFakeImage]) {
 			var cs = doc.defaultView.getComputedStyle(imDiv);
 			var bg = cs && cs.backgroundImage;
 			if (!bg) return false;
@@ -574,17 +582,17 @@ function setTumblrRelatedImage(el) {
 			dummyImg.src = src;
 			// imDiv.parentNode.replaceChild(dummyImg, imDiv);
 			dummyImg.style.display = "none";
-			dummyImg.positionAsIf = imDiv;
+			dummyImg[ePositionAsIf] = imDiv;
 			imDiv.appendChild(dummyImg);
-			imDiv.fakeImage = dummyImg;
+			imDiv[eFakeImage] = dummyImg;
 		}
 
-		el.relatedTo = imDiv.fakeImage;
+		el[eRelatedTo] = imDiv[eFakeImage];
 		return true;
 	}
 	var img = par && par.getElementsByTagName("img")[0];
 	if (img) {
-		el.relatedTo = img;
+		el[eRelatedTo] = img;
 		return true;
 	}
 	return false;
@@ -593,9 +601,9 @@ function setTumblrRelatedImage(el) {
 function handlePinterestHover(el) {
 	// Pinterest has their own GIF play buttons. Let them do their thing, and
 	// auto-animate the image that appears after clicking "play".
-	if (el.handled || !el.parentNode.querySelector(".playIndicatorPill.gifType"))
+	if (el[eHandledPinterest] || !el.parentNode.querySelector(".playIndicatorPill.gifType"))
 		return;
-	el.handled = true;
+	el[eHandledPinterest] = true;
 	var img = el.parentNode.getElementsByTagName("img")[0];
 	img.addEventListener("load", function() {
 		var ic = getIc(img);
@@ -606,7 +614,7 @@ function handlePinterestHover(el) {
 
 function partOfHoverTarget(el) {
 	return CurrentHover && (el === CurrentHover.element ||
-		el.relatedTo === CurrentHover.element ||
+		el[eRelatedTo] === CurrentHover.element ||
 		(el.id && el.id.startsWith("toggleGifs")));
 }
 
@@ -634,7 +642,7 @@ function onMouseOver(event) {
 	}
 
 	if (hasRelatedImage)
-		handleImgHover(el.relatedTo);
+		handleImgHover(el[eRelatedTo]);
 	else if ((el.localName === "img" || isGifv(el)) && el instanceof win.HTMLElement)
 		handleImgHover(el);
 }
