@@ -194,6 +194,8 @@ function isLeftClick(event) {
 }
 
 function isGifv(el) {
+	if (!Prefs.supportGifv)
+		return false;
 	if (el.localName !== "video" || el.hasAttribute("controls"))
 		return false;
 	if (el.id === "mainVid0" || el.classList.contains("gfyVid")) // gfycat

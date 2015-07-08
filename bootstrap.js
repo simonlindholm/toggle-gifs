@@ -120,6 +120,7 @@ function initPrefs() {
 		pauseExceptions: "",
 		shortcutToggle: "Ctrl+M",
 		shortcutReset: "Shift+M",
+		supportGifv: true,
 	};
 	var defaultBranch = Services.prefs.getDefaultBranch(PrefBranch);
 	var branch = Services.prefs.getBranch(PrefBranch);
