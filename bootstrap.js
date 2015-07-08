@@ -112,6 +112,7 @@ function initPrefs() {
 	var defaults = {
 		defaultPaused: false,
 		showOverlays: true,
+		indicatorStyle: 0,
 		toggleOnClick: false,
 		originalAnimationMode: "undefined",
 		playOnHover: false,

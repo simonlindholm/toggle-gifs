@@ -98,12 +98,16 @@ var OverlayCss = [
 // It would be okay to have this per document, but I'm lazy.
 var CurrentHover = null;
 var individuallyToggledImages = new WeakMap();
+var animationIndicators = new WeakMap();
 var AddonIsEnabled = true;
 var Prefs = null;
 
 // === Expando symbols ===
 
+var eNoMoreGifIndicators = "toggleGifs-noMoreGifIndicators";
+var eHasHovered = "toggleGifs-hasHovered";
 var eAttachedLoadWaiter = "toggleGifs-attachedLoadWaiter";
+var eInitedGif = "toggleGifs-initedGif";
 var eRelatedTo = "toggleGifs-relatedTo";
 var eFakeImage = "toggleGifs-fakeImage";
 var eHandledPinterest = "toggleGifs-handledPinterest";
@@ -165,6 +169,14 @@ function resetImageAnimation(el) {
 	}
 }
 
+function forEachAnimationIndicator(doc, callback) {
+	var indicators = animationIndicators.get(doc);
+	if (!indicators)
+		return;
+	for (var el of indicators)
+		callback(el);
+}
+
 function hasEventListenerOfType(el, type) {
 	var listeners = elService.getListenerInfoFor(el, {});
 	for (var i = 0; i < listeners.length; i++) {
@@ -201,6 +213,12 @@ function isGifv(el) {
 	if (el.id === "mainVid0" || el.classList.contains("gfyVid")) // gfycat
 		return true;
 	return el.hasAttribute("muted") && el.hasAttribute("loop") && el.hasAttribute("autoplay");
+}
+
+function imageTooSmall(el) {
+	if (el.width && el.height)
+		return (el.width < ButtonsMinWidth || el.height < ButtonsMinHeight);
+	return (el.offsetWidth < ButtonsMinWidth || el.offsetHeight < ButtonsMinHeight);
 }
 
 function isEditable(node) {
@@ -276,6 +294,7 @@ function toggleGifsInWindow(win) {
 		setGifStateForWindow(win, curState === 1);
 		if (CurrentHover)
 			CurrentHover.refresh();
+		forEachAnimationIndicator(win.document, showAnimationIndicator);
 	} catch (ex) {
 		// Some invisible iframes don't have presContexts, which breaks
 		// the imageAnimationMode getter.
@@ -330,7 +349,7 @@ function updateKeyListeners(forceRemove) {
 		removeEventListener("keydown", onKeydown);
 }
 
-// ==== Exception lists ====
+// ==== Load listeners ====
 
 var exceptionList = [];
 function locationOnExceptionList(loc) {
@@ -352,23 +371,28 @@ function locationOnExceptionList(loc) {
 
 function handleContentDocumentLoad(doc) {
 	var win = doc && doc.defaultView, loc = doc && doc.location;
+
 	if (loc && win && win.document === doc && loc.protocol !== "data:" &&
 			locationOnExceptionList(loc)) {
 		// This site is on the exception list. Play gifs iff the default is to pause them.
 		var play = Prefs.defaultPaused;
 		setGifStateForWindow(win, play);
 	}
+	if (Prefs.indicatorStyle > 0)
+		showIndicatorsForDocument(doc, true);
 }
 
 function onDOMWindowCreated(ev) {
 	handleContentDocumentLoad(ev.target);
 }
 
+var shownIndicator = false;
 function maybeHookContentWindows(forceUnhook, initial) {
 	function id(x) { return x; }
 	function addDot(x) { return "." + x; }
 	exceptionList = Prefs.pauseExceptions.split(/[ ,]+/).filter(id).map(addDot);
-	var shouldHook = exceptionList.length > 0 && !forceUnhook;
+	var shouldShowIndicator = Prefs.indicatorStyle > 0 && !forceUnhook;
+	var shouldHook = (Prefs.indicatorStyle > 0 || exceptionList.length > 0) && !forceUnhook;
 	if (shouldHook)
 		addEventListener("DOMWindowCreated", onDOMWindowCreated);
 	else
@@ -380,6 +404,99 @@ function maybeHookContentWindows(forceUnhook, initial) {
 			handleContentDocumentLoad(w.document);
 		});
 	}
+
+	if (shownIndicator && !shouldShowIndicator) {
+		iterateFrames(content, function(w) {
+			showIndicatorsForDocument(w.document, false);
+		});
+	}
+	shownIndicator = shouldShowIndicator;
+}
+
+function showIndicatorsForDocument(doc, show) {
+	if (show) {
+		doc.addEventListener("load", onLoad, true);
+	}
+	else {
+		doc.removeEventListener("load", onLoad, true);
+		forEachAnimationIndicator(doc, function(el) {
+			el.style.filter = el.opacity = "";
+		});
+		animationIndicators.delete(doc);
+		doc[eNoMoreGifIndicators] = true;
+	}
+}
+
+function initGifState(el, noIndicator) {
+	var doc = el.ownerDocument;
+	if (el[eInitedGif])
+		return;
+	el[eInitedGif] = true;
+	if (isGifv(el)) {
+		if (Prefs.defaultPaused)
+			getIc(el).animationMode = 1;
+	}
+	if (Prefs.indicatorStyle > 0 && !noIndicator && !imageTooSmall(el)) {
+		var ic = getIc(el), shouldShow = false;
+		try {
+			shouldShow = (ic && ic.animated);
+		}
+		catch (ex) {
+			// Image not yet decoded, so we don't know the animation state.
+			// Set up an observer and wait for a decode signal.
+			// Removing the observers is somewhat annoying, so we don't.
+			var ilc = el.QueryInterface(Ci.nsIImageLoadingContent);
+			if (!ilc)
+				return;
+			var observer = null;
+			var jsObserver = {
+				sizeAvailable: function() {},
+				frameComplete: function() {},
+				decodeComplete: function() {},
+				loadComplete: function() {},
+				frameUpdate: function() {},
+				discard: function() {},
+				isAnimated: function() {},
+			};
+			jsObserver.decodeComplete = function() {
+				ilc.removeObserver(observer);
+				// Set a zero-length timeout, because I'm not certain that it's
+				// safe to run arbitrary scripts off observer notifications.
+				doc.defaultView.setTimeout(function() {
+					if (!AddonIsEnabled || Prefs.indicatorStyle === 0 || doc[eNoMoreGifIndicators])
+						return;
+					var ic = getIc(el);
+					if (ic && ic.animated && !el[eHasHovered])
+						showAnimationIndicator(el);
+				});
+			};
+			observer = Cc["@mozilla.org/image/tools;1"]
+				.getService(Ci.imgITools).createScriptedObserver(jsObserver);
+			ilc.addObserver(observer);
+		}
+		if (shouldShow)
+			showAnimationIndicator(el);
+	}
+}
+
+function onLoadedMetadata(event) {
+	if (isGifv(event.target))
+		initGifState(event.target);
+}
+
+function onLoad(event) {
+	if (!AddonIsEnabled)
+		return;
+	var el = event.target;
+	if (el.localName === "img")
+		initGifState(el);
+}
+
+function updateLoadListeners(forceRemove) {
+	if (!forceRemove)
+		addEventListener("loadedmetadata", onLoadedMetadata, true);
+	else
+		removeEventListener("loadedmetadata", onLoadedMetadata, true);
 }
 
 // ==== Hovering ====
@@ -397,6 +514,57 @@ function onImageMouseDown(event) {
 		return;
 
 	CurrentHover.toggleImageAnimation();
+}
+
+function showAnimationIndicator(el) {
+	var doc = el.ownerDocument;
+	var indicators = animationIndicators.get(doc);
+	if (!indicators) {
+		indicators = new Set();
+		animationIndicators.set(doc, indicators);
+
+		var cr = function(name, attrs) {
+			var ret = doc.createElementNS("http://www.w3.org/2000/svg", name);
+			for (var a in attrs)
+				ret.setAttribute(a, attrs[a]);
+			return ret;
+		};
+		var crFilter = function(id, img) {
+			var ret = cr("filter", {id: id, x: "0", y: "0", width: "100%", height: "100%"});
+			var feImage = cr("feImage", {preserveAspectRatio: "xMaxYMin meet", width: "100%", height: "19", y: "3", result: "img"});
+			feImage.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", img);
+			var feComposite = cr("feComposite", {operator: "over", in: "img", in2: "SourceGraphic"});
+			ret.appendChild(feImage);
+			ret.appendChild(feComposite);
+			return ret;
+		};
+		var svg = cr("svg", {width: "0", height: "0"});
+		svg.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:xlink", "http://www.w3.org/1999/xlink");
+		svg.style.position = "absolute";
+		var defs = cr("defs", {});
+		defs.appendChild(crFilter("toggleGifsIndicatorFilterPlay", PlayIcon));
+		defs.appendChild(crFilter("toggleGifsIndicatorFilterPause", PauseIcon));
+		svg.appendChild(defs);
+		doc.documentElement.appendChild(svg);
+	}
+
+	try {
+		// TODO: This isn't necessarily accurate if the image is display: none.
+		var playing = (getIc(el).animationMode === 0);
+		if (Prefs.indicatorStyle === 1) {
+			el.style.filter = "url(#toggleGifsIndicatorFilter" + (playing ? "Pause" : "Play") + ")";
+		}
+		else if (Prefs.indicatorStyle === 2) {
+			if (playing) {
+				el.style.opacity = "1";
+				indicators.delete(el);
+				return;
+			}
+			el.style.transition = "opacity 0.4s";
+			el.style.opacity = "0.2";
+		}
+		indicators.add(el);
+	} catch (ex) {} // no longer visible, or so
 }
 
 function clearHoverEffect() {
@@ -422,7 +590,8 @@ function clearHoverEffect() {
 function applyHoverEffect(el) {
 	var doc = el.ownerDocument, win = doc.defaultView;
 	var ic = getIc(el);
-	initGifvState(el);
+	initGifState(el, true);
+	el[eHasHovered] = true;
 
 	CurrentHover = {
 		element: el,
@@ -485,11 +654,19 @@ function applyHoverEffect(el) {
 		}
 	}
 
+	var indicators = animationIndicators.get(doc);
+	if (indicators && indicators.has(el)) {
+		if (Prefs.indicatorStyle === 1)
+			el.style.filter = "";
+		else if (Prefs.indicatorStyle === 2)
+			el.style.opacity = "1";
+		indicators.delete(el);
+	}
+
 	if (!Prefs.showOverlays)
 		return;
 
-	var offsetBase = el[ePositionAsIf] || el;
-	if (offsetBase.offsetWidth < ButtonsMinWidth || offsetBase.offsetHeight < ButtonsMinHeight)
+	if (imageTooSmall(el))
 		return;
 
 	var overlay = doc.createElement("div");
@@ -531,6 +708,7 @@ function applyHoverEffect(el) {
 	content.appendChild(pauseButton);
 	overlay.appendChild(content);
 
+	var offsetBase = el[ePositionAsIf] || el;
 	var reposition = function() {
 		var par = offsetBase.offsetParent;
 		var x = offsetBase.offsetLeft, y = offsetBase.offsetTop;
@@ -707,28 +885,6 @@ function updateHoverListeners(forceRemove) {
 	}
 }
 
-// ==== Load listeners ====
-
-function initGifvState(el) {
-	if (!isGifv(el) || el.initedGifv)
-		return;
-	el.initedGifv = true;
-
-	if (Prefs.defaultPaused)
-		getIc(el).animationMode = 1;
-}
-
-function onLoadedMetadata(event) {
-	initGifvState(event.target);
-}
-
-function updateLoadListeners(forceRemove) {
-	if (!forceRemove)
-		addEventListener("loadedmetadata", onLoadedMetadata, true);
-	else
-		removeEventListener("loadedmetadata", onLoadedMetadata, true);
-}
-
 // === Signals ===
 
 var MMPrefix = Components.stack.filename + ":";
@@ -745,20 +901,17 @@ addSignal("set-gif-state", function(msg) {
 addSignal("update-pref", function(msg) {
 	var key = msg.data.key, value = msg.data.value;
 	Prefs[key] = value;
-	if (key === "showOverlays" || key === "toggleOnClick") {
+	if (key === "showOverlays" || key === "toggleOnClick")
 		updateHoverListeners();
-	}
-	else if (key === "hoverPauseWhen") {
+	else if (key === "hoverPauseWhen")
 		updateClickListeners();
-	}
-	else if (key === "pauseExceptions") {
+	else if (key === "pauseExceptions" || key === "indicatorStyle")
 		maybeHookContentWindows();
-	}
 });
 
 addSignal("destroy", function() {
 	AddonIsEnabled = false;
-	for (let sig of signals)
+	for (var sig of signals)
 		removeMessageListener(MMPrefix + sig.signal, sig.callback);
 	updateKeyListeners(true);
 	updateClickListeners(true);

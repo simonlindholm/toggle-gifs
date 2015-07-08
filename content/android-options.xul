@@ -6,5 +6,6 @@
 	<setting type="bool" pref="extensions.togglegifs.hoverPlayOnLoad" title="– as soon as the GIF loads" />
 	<setting type="boolint" pref="extensions.togglegifs.hoverPauseWhen" title="– and stop when tapping another GIF" on="1" off="0" />
 	<setting type="bool" pref="extensions.togglegifs.showOverlays" title="Display GIF controls on tap" />
+	<setting type="boolint" pref="extensions.togglegifs.indicatorStyle" title="Show an indicator for animated GIFs" on="1" off="0" />
 	<setting type="bool" pref="extensions.togglegifs.toggleOnClick" title="Toggle GIFs on click" />
 </vbox>
