@@ -194,9 +194,14 @@ function isLeftClick(event) {
 }
 
 function isGifv(el) {
-	if (!Prefs.supportGifv)
+	if (!Prefs.supportGifv || el.localName !== "video")
 		return false;
-	if (el.localName !== "video" || el.hasAttribute("controls"))
+	if (el.hasAttribute("muted") && el.hasAttribute("autoplay") &&
+		((el.getAttribute("poster") || "").indexOf("i.imgur") !== -1)) {
+		// Imgur. imgur.com has its own play indicator on mobile, respect that.
+		return (el.ownerDocument.location.host !== "m.imgur.com");
+	}
+	if (el.hasAttribute("controls"))
 		return false;
 	if (el.id === "mainVid0" || el.classList.contains("gfyVid")) // gfycat
 		return true;
