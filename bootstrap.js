@@ -211,6 +211,14 @@ function initPrefs() {
 				else if (topic === "addon-options-hidden")
 					el.removeEventListener("keydown", handleShortcutKeyDown);
 			}
+
+			// Polyfill missing CSS (bug 1181540).
+			for (let el of doc.querySelectorAll("setting[type='boolint']:not([learnmore])")) {
+				var learnMore = doc.getAnonymousElementByAttribute &&
+					doc.getAnonymousElementByAttribute(el, "class", "preferences-learnmore text-link");
+				if (learnMore)
+					learnMore.style.visibility = "collapse";
+			}
 		}
 	};
 
