@@ -425,6 +425,7 @@ function showIndicatorsForDocument(doc, show) {
 	else {
 		doc.removeEventListener("load", onLoad, true);
 		forEachAnimationIndicator(doc, function(el) {
+			// (Prefs.indicatorStyle may have changed, so we cannot use removeIndicator here.)
 			el.style.filter = el.opacity = "";
 		});
 		animationIndicators.delete(doc);
@@ -534,42 +535,56 @@ function showAnimationIndicator(el) {
 				ret.setAttribute(a, attrs[a]);
 			return ret;
 		};
-		var crFilter = function(id, img) {
-			var ret = cr("filter", {id: id, x: "0", y: "0", width: "100%", height: "100%"});
-			var feImage = cr("feImage", {preserveAspectRatio: "xMaxYMin meet", width: "100%", height: "19", y: "3", result: "img"});
-			feImage.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", img);
-			var feComposite = cr("feComposite", {operator: "over", in: "img", in2: "SourceGraphic"});
-			ret.appendChild(feImage);
-			ret.appendChild(feComposite);
-			return ret;
-		};
 		var svg = cr("svg", {width: "0", height: "0"});
 		svg.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:xlink", "http://www.w3.org/1999/xlink");
 		svg.style.position = "absolute";
 		var defs = cr("defs", {});
-		defs.appendChild(crFilter("toggleGifsIndicatorFilterPlay", PlayIcon));
-		defs.appendChild(crFilter("toggleGifsIndicatorFilterPause", PauseIcon));
+		var filter = cr("filter", {id: "toggleGifsIndicatorFilter",
+			x: "0", y: "0", width: "100%", height: "100%"});
+		var feImage = cr("feImage", {preserveAspectRatio: "xMaxYMin meet",
+			width: "100%", height: "19", y: "3", result: "img"});
+		feImage.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", PlayIcon);
+		var feComposite = cr("feComposite", {operator: "over", in: "img", in2: "SourceGraphic"});
+		filter.appendChild(feImage);
+		filter.appendChild(feComposite);
+		defs.appendChild(filter);
 		svg.appendChild(defs);
 		doc.documentElement.appendChild(svg);
 	}
 
 	try {
-		// TODO: This isn't necessarily accurate if the image is display: none.
 		var playing = (getIc(el).animationMode === 0);
-		if (Prefs.indicatorStyle === 1) {
-			el.style.filter = "url(#toggleGifsIndicatorFilter" + (playing ? "Pause" : "Play") + ")";
+		if (playing && getDwu(doc.defaultView).imageAnimationMode === 1 && !el.getClientRects()[0]) {
+			// This can happen if we got a decode signal from e.g. a cached image, but
+			// the animation state isn't set yet because the image element is display: none.
+			playing = false;
 		}
-		else if (Prefs.indicatorStyle === 2) {
-			if (playing) {
-				el.style.opacity = "1";
-				indicators.delete(el);
-				return;
+
+		if (playing) {
+			removeIndicator(el);
+		}
+		else {
+			if (Prefs.indicatorStyle === 1) {
+				el.style.filter = "url(#toggleGifsIndicatorFilter)";
 			}
-			el.style.transition = "opacity 0.4s";
-			el.style.opacity = "0.2";
+			else if (Prefs.indicatorStyle === 2) {
+				el.style.transition = "opacity 0.4s";
+				el.style.opacity = "0.2";
+			}
+			indicators.add(el);
 		}
-		indicators.add(el);
 	} catch (ex) {} // no longer visible, or so
+}
+
+function removeIndicator(el) {
+	var indicators = animationIndicators.get(el.ownerDocument);
+	if (!indicators || !indicators.has(el))
+		return;
+	if (Prefs.indicatorStyle === 1)
+		el.style.filter = "none";
+	else if (Prefs.indicatorStyle === 2)
+		el.style.opacity = "1";
+	indicators.delete(el);
 }
 
 function clearHoverEffect() {
@@ -659,14 +674,7 @@ function applyHoverEffect(el) {
 		}
 	}
 
-	var indicators = animationIndicators.get(doc);
-	if (indicators && indicators.has(el)) {
-		if (Prefs.indicatorStyle === 1)
-			el.style.filter = "";
-		else if (Prefs.indicatorStyle === 2)
-			el.style.opacity = "1";
-		indicators.delete(el);
-	}
+	removeIndicator(el);
 
 	if (!Prefs.showOverlays)
 		return;
