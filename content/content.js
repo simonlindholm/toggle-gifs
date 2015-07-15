@@ -112,6 +112,7 @@ var eRelatedTo = "toggleGifs-relatedTo";
 var eFakeImage = "toggleGifs-fakeImage";
 var eHandledPinterest = "toggleGifs-handledPinterest";
 var ePositionAsIf = "toggleGifs-positionAsIf";
+var eCachedIsGifv = "toggleGifs-cachedIsGifv";
 
 // === Helpers ===
 
@@ -206,18 +207,24 @@ function isLeftClick(event) {
 }
 
 function isGifv(el) {
-	if (!Prefs.supportGifv || el.localName !== "video")
+	if (el.localName !== "video" || !Prefs.supportGifv)
 		return false;
-	if (el.hasAttribute("muted") && el.hasAttribute("autoplay") &&
-		((el.getAttribute("poster") || "").indexOf("i.imgur") !== -1)) {
-		// Imgur. imgur.com has its own play indicator on mobile, respect that.
-		return (el.ownerDocument.location.host !== "m.imgur.com");
+	var cachedIsGifv = el[eCachedIsGifv];
+	if (cachedIsGifv === undefined) {
+		cachedIsGifv = el[eCachedIsGifv] = (function(el) {
+			if (el.hasAttribute("muted") && el.hasAttribute("autoplay") &&
+				((el.getAttribute("poster") || "").indexOf("i.imgur") !== -1)) {
+				// Imgur. imgur.com has its own play indicator on mobile, respect that.
+				return (el.ownerDocument.location.host !== "m.imgur.com");
+			}
+			if (el.hasAttribute("controls"))
+				return false;
+			if (el.id === "mainVid0" || el.classList.contains("gfyVid")) // gfycat
+				return true;
+			return el.hasAttribute("muted") && el.hasAttribute("loop") && el.hasAttribute("autoplay");
+		})(el);
 	}
-	if (el.hasAttribute("controls"))
-		return false;
-	if (el.id === "mainVid0" || el.classList.contains("gfyVid")) // gfycat
-		return true;
-	return el.hasAttribute("muted") && el.hasAttribute("loop") && el.hasAttribute("autoplay");
+	return cachedIsGifv;
 }
 
 function imageTooSmall(el) {
