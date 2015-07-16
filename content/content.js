@@ -544,8 +544,11 @@ function showAnimationIndicator(el) {
 		var feImage = cr("feImage", {preserveAspectRatio: "xMaxYMin meet",
 			width: "100%", height: "19", y: "3", result: "img"});
 		feImage.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", PlayIcon);
-		var feComposite = cr("feComposite", {operator: "over", in: "img", in2: "SourceGraphic"});
+		var feColorMat = cr("feColorMatrix", {in: "img", result: "img2",
+			type: "matrix", values: "2 2 2 0 0 0 0.5 0 0 0 0 0 0.5 0 0 0 0 0 1 0"});
+		var feComposite = cr("feComposite", {operator: "over", in: "img2", in2: "SourceGraphic"});
 		filter.appendChild(feImage);
+		filter.appendChild(feColorMat);
 		filter.appendChild(feComposite);
 		defs.appendChild(filter);
 		svg.appendChild(defs);
