@@ -162,10 +162,13 @@ function setGifStateForWindow(win, playing) {
 function resetImageAnimation(el) {
 	var ic = getIc(el);
 	if (ic && ic.animated) {
+		// ic.resetAnimation() only works on animations that are currently playing,
+		// so temporarily unpause the image if it is paused (and not a GIFV).
+		var gif = !isGifv(el);
 		var origMode = ic.animationMode;
-		if (origMode) ic.animationMode = 0;
+		if (gif && origMode) ic.animationMode = 0;
 		ic.resetAnimation();
-		if (origMode) ic.animationMode = origMode;
+		if (gif && origMode) ic.animationMode = origMode;
 	}
 }
 
