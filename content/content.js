@@ -101,9 +101,10 @@ var Prefs = null;
 
 // === Expando symbols ===
 
-var eNoMoreGifIndicators = "toggleGifs-noMoreGifIndicators";
-var eHasHovered = "toggleGifs-hasHovered";
+var eTooSmall = "toggleGifs-tooSmall";
 var eInjectedCss = "toggleGifs-injectedCss";
+var eInjectedSvg = "toggleGifs-injectedSvg";
+var eShownIndicator = "toggleGifs-shownIndicator";
 var eAttachedLoadWaiter = "toggleGifs-attachedLoadWaiter";
 var eInitedGif = "toggleGifs-initedGif";
 var eRelatedTo = "toggleGifs-relatedTo";
@@ -174,8 +175,14 @@ function forEachAnimationIndicator(doc, callback) {
 	var indicators = animationIndicators.get(doc);
 	if (!indicators)
 		return;
-	for (var el of indicators)
-		callback(el);
+	for (var el of indicators) {
+		try {
+			callback(el);
+		} catch (ex) {
+			// Dead wrappers or some other bad thing about the image. Remove it from the list.
+			indicators.delete(el);
+		}
+	}
 }
 
 function hasEventListenerOfType(el, type) {
@@ -222,9 +229,15 @@ function isGifv(el) {
 }
 
 function imageTooSmall(el) {
+	var ret = el[eTooSmall];
+	if (ret !== undefined)
+		return ret;
 	if (el.width && el.height)
-		return (el.width < ButtonsMinWidth || el.height < ButtonsMinHeight);
-	return (el.offsetWidth < ButtonsMinWidth || el.offsetHeight < ButtonsMinHeight);
+		ret = (el.width < ButtonsMinWidth || el.height < ButtonsMinHeight);
+	else
+		ret = (el.offsetWidth < ButtonsMinWidth || el.offsetHeight < ButtonsMinHeight);
+	el[eTooSmall] = ret;
+	return ret;
 }
 
 function isEditable(node) {
@@ -255,6 +268,9 @@ function onClick(event) {
 		return;
 	individuallyToggledImages.delete(win.document);
 	setGifStateForWindow(win, false);
+	forEachAnimationIndicator(win.document, function(el) {
+		updateIndicator(el, true);
+	});
 }
 
 function updateClickListeners(forceRemove) {
@@ -301,7 +317,9 @@ function toggleGifsInWindow(win) {
 		setGifStateForWindow(win, curState === 1);
 		if (CurrentHover)
 			CurrentHover.refresh();
-		forEachAnimationIndicator(win.document, showAnimationIndicator);
+		forEachAnimationIndicator(win.document, function(el) {
+			updateIndicator(el, true);
+		});
 	} catch (ex) {
 		// Some invisible iframes don't have presContexts, which breaks
 		// the imageAnimationMode getter.
@@ -427,15 +445,13 @@ function showIndicatorsForDocument(doc, show) {
 	else {
 		doc.removeEventListener("load", onLoad, true);
 		forEachAnimationIndicator(doc, function(el) {
-			// (Prefs.indicatorStyle may have changed, so we cannot use removeIndicator here.)
 			el.style.filter = el.opacity = "";
 		});
 		animationIndicators.delete(doc);
-		doc[eNoMoreGifIndicators] = true;
 	}
 }
 
-function initGifState(el, noIndicator) {
+function initGifState(el) {
 	var doc = el.ownerDocument;
 	if (el[eInitedGif])
 		return;
@@ -444,7 +460,7 @@ function initGifState(el, noIndicator) {
 		if (Prefs.defaultPaused)
 			getIc(el).animationMode = 1;
 	}
-	if (Prefs.indicatorStyle > 0 && !noIndicator && !imageTooSmall(el)) {
+	if (Prefs.indicatorStyle > 0 && !imageTooSmall(el)) {
 		var ic = getIc(el), shouldShow = false;
 		try {
 			shouldShow = (ic && ic.animated);
@@ -471,11 +487,11 @@ function initGifState(el, noIndicator) {
 				// Set a zero-length timeout, because I'm not certain that it's
 				// safe to run arbitrary scripts off observer notifications.
 				doc.defaultView.setTimeout(function() {
-					if (!AddonIsEnabled || Prefs.indicatorStyle === 0 || doc[eNoMoreGifIndicators])
+					if (!AddonIsEnabled || Prefs.indicatorStyle === 0)
 						return;
 					var ic = getIc(el);
-					if (ic && ic.animated && !el[eHasHovered])
-						showAnimationIndicator(el);
+					if (ic && ic.animated)
+						updateIndicator(el, true);
 				});
 			};
 			observer = Cc["@mozilla.org/image/tools;1"]
@@ -483,7 +499,7 @@ function initGifState(el, noIndicator) {
 			ilc.addObserver(observer);
 		}
 		if (shouldShow)
-			showAnimationIndicator(el);
+			updateIndicator(el, true);
 	}
 }
 
@@ -522,107 +538,118 @@ function onImageMouseDown(event) {
 		return;
 
 	CurrentHover.toggleImageAnimation();
+	updateIndicator(el);
 }
 
-function showAnimationIndicator(el) {
+function updateIndicator(el, initial) {
+	if (Prefs.indicatorStyle === 0 || imageTooSmall(el))
+		return;
 	var doc = el.ownerDocument;
 	var indicators = animationIndicators.get(doc);
 	if (!indicators) {
 		indicators = new Set();
 		animationIndicators.set(doc, indicators);
-
-		var cr = function(name, attrs) {
-			var ret = doc.createElementNS("http://www.w3.org/2000/svg", name);
-			for (var a in attrs)
-				ret.setAttribute(a, attrs[a]);
-			return ret;
-		};
-		var svg = cr("svg", {width: "0", height: "0"});
-		svg.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:xlink", "http://www.w3.org/1999/xlink");
-		svg.style.position = "absolute";
-		var defs = cr("defs", {});
-		var filter = cr("filter", {id: "toggleGifsIndicatorFilter",
-			x: "0", y: "0", width: "100%", height: "100%"});
-		var feImage = cr("feImage", {preserveAspectRatio: "xMaxYMin meet",
-			width: "100%", height: "19", y: "3", result: "img"});
-		feImage.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", PlayIcon);
-		var feComposite = cr("feComposite", {operator: "over", in: "img", in2: "SourceGraphic"});
-		filter.appendChild(feImage);
-		filter.appendChild(feComposite);
-		defs.appendChild(filter);
-		svg.appendChild(defs);
-		doc.documentElement.appendChild(svg);
 	}
 
 	try {
-		var playing = (getIc(el).animationMode === 0);
-		if (playing && getDwu(doc.defaultView).imageAnimationMode === 1 && !el.getClientRects()[0]) {
-			// This can happen if we got a decode signal from e.g. a cached image, but
-			// the animation state isn't set yet because the image element is display: none.
-			playing = false;
-		}
-
-		if (playing) {
-			removeIndicator(el);
+		var shouldShow;
+		if (Prefs.showOverlays && CurrentHover && CurrentHover.element === el) {
+			shouldShow = false;
 		}
 		else {
+			shouldShow = (getIc(el).animationMode !== 0);
+			if (initial && !shouldShow && getDwu(doc.defaultView).imageAnimationMode === 1 &&
+					!el.getClientRects()[0]) {
+				// This can happen if we got a decode signal from e.g. a cached image, but
+				// the animation state isn't set yet because the image element is display: none.
+				shouldShow = true;
+			}
+		}
+
+		if (shouldShow) {
 			if (Prefs.indicatorStyle === 1) {
+				injectIndicatorSvg(doc);
 				el.style.filter = "url(#toggleGifsIndicatorFilter)";
 			}
 			else if (Prefs.indicatorStyle === 2) {
-				el.style.transition = "opacity 0.4s";
-				el.style.opacity = "0.2";
-			}
-			indicators.add(el);
-
-			if (isGifv(el)) {
-				// A playing video with an SVG filter kills performance, so as a safety measure,
-				// remove the indicator again if the video is played by script.
-				el.addEventListener("play", function() {
-					removeIndicator(this);
-				});
+				// We don't want to do this twice, since it looks weird.
+				if (!el[eShownIndicator]) {
+					el.style.transition = "opacity 0.4s";
+					el.style.opacity = "0.2";
+				}
+				el[eShownIndicator] = true;
 			}
 		}
+		else {
+			if (Prefs.indicatorStyle === 1)
+				el.style.filter = "none";
+			else if (Prefs.indicatorStyle === 2)
+				el.style.opacity = "1";
+		}
+
+		if (isGifv(el) && !indicators.has(el)) {
+			// A playing video with an SVG filter kills performance, so as a safety measure,
+			// remove the indicator again if the video is played by script.
+			el.addEventListener("play", function() {
+				updateIndicator(this);
+			});
+		}
+		indicators.add(el);
 	} catch (ex) {} // no longer visible, or so
 }
 
-function removeIndicator(el) {
-	var indicators = animationIndicators.get(el.ownerDocument);
-	if (!indicators || !indicators.has(el))
+function injectIndicatorSvg(doc) {
+	if (doc[eInjectedSvg])
 		return;
-	if (Prefs.indicatorStyle === 1)
-		el.style.filter = "none";
-	else if (Prefs.indicatorStyle === 2)
-		el.style.opacity = "1";
-	indicators.delete(el);
+	doc[eInjectedSvg] = true;
+	var cr = function(name, attrs) {
+		var ret = doc.createElementNS("http://www.w3.org/2000/svg", name);
+		for (var a in attrs)
+			ret.setAttribute(a, attrs[a]);
+		return ret;
+	};
+	var svg = cr("svg", {width: "0", height: "0"});
+	svg.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:xlink", "http://www.w3.org/1999/xlink");
+	svg.style.position = "absolute";
+	var defs = cr("defs", {});
+	var filter = cr("filter", {id: "toggleGifsIndicatorFilter",
+		x: "0", y: "0", width: "100%", height: "100%"});
+	var feImage = cr("feImage", {preserveAspectRatio: "xMaxYMin meet",
+		width: "100%", height: "19", y: "3", result: "img"});
+	feImage.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", PlayIcon);
+	var feComposite = cr("feComposite", {operator: "over", in: "img", in2: "SourceGraphic"});
+	filter.appendChild(feImage);
+	filter.appendChild(feComposite);
+	defs.appendChild(filter);
+	svg.appendChild(defs);
+	doc.documentElement.appendChild(svg);
 }
 
 function clearHoverEffect() {
 	if (!CurrentHover)
 		return;
+	var controller = CurrentHover;
+	CurrentHover = null;
 	try {
-		CurrentHover.clearTimeouts();
-		if (CurrentHover.overlay && CurrentHover.overlay.parentNode)
-			CurrentHover.overlay.parentNode.removeChild(CurrentHover.overlay);
-		if (CurrentHover.mo)
-			CurrentHover.mo.disconnect();
-		var el = CurrentHover.element;
+		controller.clearTimeouts();
+		var el = controller.element, overlay = controller.overlay;
+		if (overlay && overlay.parentNode)
+			overlay.parentNode.removeChild(overlay);
+		if (controller.mo)
+			controller.mo.disconnect();
 		el.removeEventListener("mousedown", onImageMouseDown);
-		if (Prefs.hoverPauseWhen === HoverPause.Unhover && CurrentHover.playing &&
+		if (Prefs.hoverPauseWhen === HoverPause.Unhover && controller.playing &&
 				individuallyToggledImages.get(el.ownerDocument) === el) {
 			individuallyToggledImages.delete(el.ownerDocument);
 			getIc(el).animationMode = 1;
 		}
+		updateIndicator(el);
 	} catch (ex) {} // dead wrapper exceptions
-	CurrentHover = null;
 }
 
 function applyHoverEffect(el) {
 	var doc = el.ownerDocument, win = doc.defaultView;
 	var ic = getIc(el);
-	initGifState(el, true);
-	el[eHasHovered] = true;
-
 	CurrentHover = {
 		element: el,
 		playing: null,
@@ -644,6 +671,8 @@ function applyHoverEffect(el) {
 		},
 		setPauseButtonAppearance: function() {}
 	};
+
+	initGifState(el);
 	CurrentHover.refresh();
 
 	if (Prefs.toggleOnClick)
@@ -655,6 +684,7 @@ function applyHoverEffect(el) {
 			if (Prefs.hoverPauseWhen === HoverPause.Next) {
 				try {
 					getIc(previous).animationMode = 1;
+					updateIndicator(previous);
 				} catch(e) {} // dead image
 			}
 
@@ -672,6 +702,7 @@ function applyHoverEffect(el) {
 							(Prefs.hoverPauseWhen === HoverPause.Never || prev === el))
 						{
 							ic.animationMode = 0;
+							updateIndicator(el);
 							if (CurrentHover)
 								CurrentHover.refresh();
 						}
@@ -680,17 +711,15 @@ function applyHoverEffect(el) {
 			}
 			else {
 				CurrentHover.toggleImageAnimation();
+				updateIndicator(el);
 			}
 		}
 	}
 
-	removeIndicator(el);
-
-	if (!Prefs.showOverlays)
+	if (!Prefs.showOverlays || imageTooSmall(el))
 		return;
 
-	if (imageTooSmall(el))
-		return;
+	updateIndicator(el);
 
 	injectOverlayCss(el.ownerDocument);
 
@@ -818,8 +847,10 @@ function handlePinterestHover(el) {
 	var img = el.parentNode.getElementsByTagName("img")[0];
 	img.addEventListener("load", function() {
 		var ic = getIc(img);
-		if (ic && ic.animated)
+		if (ic && ic.animated) {
 			ic.animationMode = 0;
+			updateIndicator(img);
+		}
 	});
 }
 
@@ -895,7 +926,7 @@ function onMouseOut() {
 			clearHoverEffect();
 		}, 50);
 		CurrentHover.timeoutClearer = function() {
-			CurrentHover.timeoutClearer = null;
+			this.timeoutClearer = null;
 			win.clearTimeout(timeout);
 		};
 	} catch (ex) {
