@@ -233,9 +233,10 @@ function isEditable(node) {
 	var doc = node.ownerDocument;
 	if (doc.designMode === "on" || node.isContentEditable)
 		return true;
-	if (["input", "textarea", "select", "object", "embed"].indexOf(node.localName) !== -1)
+	var tag = node.localName;
+	if (tag === "input" && node.type !== "button")
 		return true;
-	return false;
+	return (["textarea", "select", "object", "embed"].indexOf(tag) !== -1);
 }
 
 function iterateFrames(win, callback) {
