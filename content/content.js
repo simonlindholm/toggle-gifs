@@ -61,35 +61,6 @@ var HoverPause = {Never: 0, Next: 1, Unhover: 2, ClickOutside: 3};
 
 var ButtonsMinWidth = 60, ButtonsMinHeight = 40;
 
-var OverlayCss = [
-	"#toggleGifsOverlay, #toggleGifsOverlay * {",
-		"all: initial;", // Fx27+
-		"border: none !important;",
-		"margin: 0 !important;",
-		"padding: 0 !important;",
-		"-moz-box-sizing: content-box !important;",
-	"}",
-	"#toggleGifsOverlay {",
-		"position: absolute !important;",
-		"z-index: 2147483647 !important;",
-	"}",
-	"#toggleGifsOverlay > #toggleGifsContent {",
-		"position: absolute !important;",
-		"top: 0 !important;",
-		"right: 0 !important;",
-		"text-align: right !important;",
-		"white-space: nowrap !important;",
-	"}",
-	"#toggleGifsResetButton, #toggleGifsPauseButton {",
-		"width: 24px !important;",
-		"height: 25px !important;",
-		"display: inline-block !important;",
-		"background-repeat: no-repeat !important;",
-		"background-position: 0 3px !important;",
-		"cursor: pointer !important;",
-	"}",
-].join("\n");
-
 // === Global state ===
 
 // It would be okay to have this per document, but I'm lazy.
@@ -102,7 +73,6 @@ var Prefs = null;
 // === Expando symbols ===
 
 var eTooSmall = "toggleGifs-tooSmall";
-var eInjectedCss = "toggleGifs-injectedCss";
 var eInjectedSvg = "toggleGifs-injectedSvg";
 var eShownIndicator = "toggleGifs-shownIndicator";
 var eAttachedLoadWaiter = "toggleGifs-attachedLoadWaiter";
@@ -717,14 +687,26 @@ function applyHoverEffect(el) {
 
 	updateIndicator(el);
 
-	injectOverlayCss(el.ownerDocument);
+	function setButtonCss(el) {
+		setDefaultCss(el);
+		el.style.width = "24px";
+		el.style.height = "25px";
+		el.style.display = "inline-block";
+		el.style.backgroundRepeat = "no-repeat";
+		el.style.backgroundPosition = "0 3px";
+		el.style.cursor = "pointer";
+	}
 
 	var overlay = doc.createElement("div");
+	setDefaultCss(overlay);
 	overlay.id = "toggleGifsOverlay";
+	overlay.style.position = "absolute";
+	overlay.style.zIndex = "2147483647";
 
 	// TODO: All these listeners should be capturing and registered on the document.
 	var resetButton = doc.createElement("span");
 	resetButton.id = "toggleGifsResetButton";
+	setButtonCss(resetButton);
 	resetButton.style.backgroundImage = "url(" + ResetIcon + ")";
 	resetButton.onmousedown = function(event) {
 		if (!isLeftClick(event))
@@ -735,6 +717,7 @@ function applyHoverEffect(el) {
 	resetButton.onclick = resetButton.onmouseup = cancelEvent;
 	var pauseButton = doc.createElement("span");
 	pauseButton.id = "toggleGifsPauseButton";
+	setButtonCss(pauseButton);
 	CurrentHover.setPauseButtonAppearance = function() {
 		pauseButton.style.backgroundImage =
 			"url(" + (this.playing ? PauseIcon : PlayIcon) + ")";
@@ -750,6 +733,12 @@ function applyHoverEffect(el) {
 
 	var content = doc.createElement("span");
 	content.id = "toggleGifsContent";
+	setDefaultCss(content);
+	content.style.position = "absolute";
+	content.style.top = "0";
+	content.style.right = "0";
+	content.style.textAlign = "right";
+	content.style.whiteSpace = "nowrap";
 	content.appendChild(resetButton);
 	content.appendChild(pauseButton);
 	overlay.appendChild(content);
@@ -784,14 +773,12 @@ function applyHoverEffect(el) {
 	CurrentHover.mo = mo;
 }
 
-function injectOverlayCss(doc) {
-	if (doc[eInjectedCss])
-		return;
-	doc[eInjectedCss] = true;
-	var css = doc.createElement("style");
-	css.textContent = OverlayCss;
-	css.style.display = "none";
-	doc.documentElement.appendChild(css);
+function setDefaultCss(el) {
+	// Apparently "all: initial" hides the element for some reason.
+	el.style.border = "none";
+	el.style.margin = "0";
+	el.style.padding = "0";
+	el.style.boxSizing = "content-box";
 }
 
 function setTumblrRelatedImage(el) {
