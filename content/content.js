@@ -69,9 +69,6 @@ var OverlayCss = [
 		"padding: 0 !important;",
 		"-moz-box-sizing: content-box !important;",
 	"}",
-	"#toggleGifsOverlay > style {",
-		"display: none !important;",
-	"}",
 	"#toggleGifsOverlay {",
 		"position: absolute !important;",
 		"z-index: 2147483647 !important;",
@@ -106,6 +103,7 @@ var Prefs = null;
 
 var eNoMoreGifIndicators = "toggleGifs-noMoreGifIndicators";
 var eHasHovered = "toggleGifs-hasHovered";
+var eInjectedCss = "toggleGifs-injectedCss";
 var eAttachedLoadWaiter = "toggleGifs-attachedLoadWaiter";
 var eInitedGif = "toggleGifs-initedGif";
 var eRelatedTo = "toggleGifs-relatedTo";
@@ -694,12 +692,10 @@ function applyHoverEffect(el) {
 	if (imageTooSmall(el))
 		return;
 
+	injectOverlayCss(el.ownerDocument);
+
 	var overlay = doc.createElement("div");
 	overlay.id = "toggleGifsOverlay";
-
-	var css = doc.createElement("style");
-	css.textContent = OverlayCss;
-	overlay.appendChild(css);
 
 	// TODO: All these listeners should be capturing and registered on the document.
 	var resetButton = doc.createElement("span");
@@ -761,6 +757,16 @@ function applyHoverEffect(el) {
 	var mo = new win.MutationObserver(reposition);
 	mo.observe(el, {attributes: true});
 	CurrentHover.mo = mo;
+}
+
+function injectOverlayCss(doc) {
+	if (doc[eInjectedCss])
+		return;
+	doc[eInjectedCss] = true;
+	var css = doc.createElement("style");
+	css.textContent = OverlayCss;
+	css.style.display = "none";
+	doc.documentElement.appendChild(css);
 }
 
 function setTumblrRelatedImage(el) {
