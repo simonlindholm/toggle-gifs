@@ -464,8 +464,7 @@ function initGifState(el) {
 		var ic = getIc(el), shouldShow = false;
 		try {
 			shouldShow = (ic && ic.animated);
-		}
-		catch (ex) {
+		} catch (ex) {
 			// Image not yet decoded, so we don't know the animation state.
 			// Set up an observer and wait for a decode signal.
 			// Removing the observers is somewhat annoying, so we don't.
@@ -483,16 +482,18 @@ function initGifState(el) {
 				isAnimated: function() {},
 			};
 			jsObserver.decodeComplete = function() {
-				ilc.removeObserver(observer);
-				// Set a zero-length timeout, because I'm not certain that it's
-				// safe to run arbitrary scripts off observer notifications.
-				doc.defaultView.setTimeout(function() {
-					if (!AddonIsEnabled || Prefs.indicatorStyle === 0)
-						return;
-					var ic = getIc(el);
-					if (ic && ic.animated)
-						updateIndicator(el, true);
-				});
+				try {
+					ilc.removeObserver(observer);
+					// Set a zero-length timeout, because I'm not certain that it's
+					// safe to run arbitrary scripts off observer notifications.
+					doc.defaultView.setTimeout(function() {
+						if (!AddonIsEnabled || Prefs.indicatorStyle === 0)
+							return;
+						var ic = getIc(el);
+						if (ic && ic.animated)
+							updateIndicator(el, true);
+					});
+				} catch (ex) {} // dead wrappers
 			};
 			observer = Cc["@mozilla.org/image/tools;1"]
 				.getService(Ci.imgITools).createScriptedObserver(jsObserver);
