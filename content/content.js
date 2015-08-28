@@ -223,6 +223,8 @@ function isGifv(el) {
 	}
 	if (el.hasAttribute("controls"))
 		return false;
+	if (el.classList.contains("animated-gif")) // twitter
+		return true;
 	if (el.id === "mainVid0" || el.classList.contains("gfyVid")) // gfycat
 		return true;
 	return el.hasAttribute("muted") && el.hasAttribute("loop") && el.hasAttribute("autoplay");
