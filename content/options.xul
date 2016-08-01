@@ -2,7 +2,7 @@
 <vbox xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul">
 	<setting type="bool" pref="extensions.togglegifs.defaultPaused" title="Pause GIFs by default" />
 	<setting type="string" pref="extensions.togglegifs.pauseExceptions" title="– override that setting for these sites (e.g. example.com, example.org)" />
-	<setting type="boolint" pref="extensions.togglegifs.indicatorStyle" title="– show an indicator for paused GIFs" on="1" off="0" />
+	<setting type="boolint" pref="extensions.togglegifs.indicatorStyle" title="– show an indicator for paused GIFs (experimental)" on="1" off="0" />
 	<setting type="bool" pref="extensions.togglegifs.playOnHover" title="Auto-play on hover" />
 	<setting type="bool" pref="extensions.togglegifs.hoverPlayOnLoad" title="– as soon as the GIF loads" />
 	<setting pref="extensions.togglegifs.hoverPauseWhen" type="radio" title="– and stop again when:">
