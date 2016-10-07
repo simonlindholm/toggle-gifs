@@ -682,7 +682,7 @@ function applyHoverEffect(el) {
 	if (Prefs.playOnHover && !CurrentHover.playing) {
 		var previous = individuallyToggledImages.get(el.ownerDocument);
 		if (previous !== el) {
-			if (Prefs.hoverPauseWhen === HoverPause.Next) {
+			if (previous && Prefs.hoverPauseWhen === HoverPause.Next) {
 				try {
 					getIc(previous).animationMode = 1;
 					updateIndicator(previous);
