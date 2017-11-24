@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+fieldset {
+	border: none;
+	margin: 0;
+	padding: 0;
+}
+legend {
+	font-size: 13pt;
+	font-weight: bold;
+	padding-bottom: 1em;
+}
+.row {
+	display: table-row;
+}
+* {
+	vertical-align: middle;
+}
+.desc, .val {
+	display: table-cell;
+}
+.desc {
+	padding: 0.45em;
+}
+</style>
+<script src="settings.js"></script>
+</head>
+<body hidden>
+<fieldset>
+	<legend>Preferences</legend>
+	<label class="row">
+		<span class="desc">Pause GIFs by default</span>
+		<div class="val"><input type="checkbox" id="pause-by-default"></div>
+	</label>
+
+	<label class="row">
+		<span class="desc">– show an indicator for paused GIFs</span>
+		<div class="val"><input type="checkbox" data-type="boolint" data-pref="indicatorStyle"></div>
+	</label>
+
+	<label class="row">
+		<span class="desc">Auto-play on hover</span>
+		<div class="val"><input type="checkbox" data-pref="playOnHover"></div>
+	</label>
+
+	<label class="row">
+		<span class="desc">– as soon as the GIF loads</span>
+		<div class="val"><input type="checkbox" data-pref="hoverPlayOnLoad"></div>
+	</label>
+
+	<div class="row">
+		<span class="desc">– and stop again when:</span>
+		<div class="val">
+		<label>
+			<input type="radio" name="hoverPauseWhen" value="0">
+			<span>never</span>
+		</label>
+		<label>
+			<input type="radio" name="hoverPauseWhen" value="1">
+			<span>hovering another GIF</span>
+		</label>
+		<label>
+			<input type="radio" name="hoverPauseWhen" value="2">
+			<span>unhovering</span>
+		</label>
+		<label>
+			<input type="radio" name="hoverPauseWhen" value="3">
+			<span>clicking outside</span>
+		</label>
+		</div>
+	</div>
+
+	<label class="row">
+		<span class="desc">Display GIF controls on hover</span>
+		<div class="val"><input type="checkbox" data-pref="showOverlays"></div>
+	</label>
+
+	<label class="row">
+		<span class="desc">Shortcut for toggling GIFs</span>
+		<div class="val"><input data-type="shortcut" data-pref="shortcutToggle"></div>
+	</label>
+
+	<label class="row">
+		<span class="desc">Shortcut for resetting GIFs</span>
+		<div class="val"><input data-type="shortcut" data-pref="shortcutReset"></div>
+	</label>
+
+</fieldset>
+</body>
+</html>
