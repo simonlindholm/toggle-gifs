@@ -1,7 +1,6 @@
 /* global console, browser */
+/* eslint new-cap: off */
 "use strict";
-
-console.log("background.js loaded!");
 
 // Max memory usage: (200 + 200) * 500 bytes = 200 kB; less in practice.
 // Plus information about the waiting tabs, and data structure overhead.
@@ -11,12 +10,12 @@ var MAX_URL_SIZE = 500;
 
 function sendMessageToActiveTab(msg) {
 	browser.tabs.query({
+		active: true,
 		currentWindow: true,
-		active: true
-	}).then(function(tabs) {
-		return Promise.all(tabs.map(tab =>
-			browser.tabs.sendMessage(tab.id, msg)));
-	}).catch(console.error);
+	}).then(tabs =>
+			Promise.all(tabs.map(tab =>
+				browser.tabs.sendMessage(tab.id, msg))))
+		.catch(console.error);
 }
 
 function isDataUrl(url) {
@@ -55,7 +54,7 @@ var AnimatedUrlCache = {
 	},
 
 	evict(map, keep) {
-		let ind = 0, del = map.length - keep, ar = [], key;
+		var ind = 0, del = map.length - keep, ar = [], key;
 		for (key of map.keys()) {
 			if (++ind > del) break;
 			ar.push(key);
@@ -86,15 +85,15 @@ var AnimatedUrlCache = {
 	},
 };
 
-function* gifDecoder($) {
+function *gifDecoder($) {
 	var size, r, len;
 
 	// Header
 	if ($.avail < 6) yield $.Ensure(6);
 	var header = $.read(6);
-	if (header[0] != 0x47 || header[1] != 0x49 || header[2] != 0x46)
+	if (header[0] !== 0x47 || header[1] !== 0x49 || header[2] !== 0x46)
 		return $.Error("not a gif");
-	if (header[3] != 0x38 || header[5] != 0x61 || (header[4] != 0x37 && header[4] != 0x39))
+	if (header[3] !== 0x38 || header[5] !== 0x61 || (header[4] !== 0x37 && header[4] !== 0x39))
 		return $.Error("unrecognized version");
 
 	// Metadata
@@ -116,32 +115,32 @@ function* gifDecoder($) {
 		var type = $.read1();
 
 		// Extension block
-		if (type == 0x21) {
+		if (type === 0x21) {
 			if ($.avail < 2) yield $.Ensure(2);
 			type = $.read1();
 			len = $.read1();
-			if (len == 0) {
+			if (len === 0) {
 				// do nothing, per fx impl
-			} else if (type == 0xf9) { // gce
+			} else if (type === 0xf9) { // gce
 				// again per fx impl, read max(len, 4) bytes, and process the first 4
 				len = Math.max(len, 4);
-				if ($.avail < len+1) yield $.Ensure(len+1);
+				if ($.avail < len + 1) yield $.Ensure(len + 1);
 				$.skip(1); // reversed, disposal method, user input, transparency
 				var dur = $.readU16();
 				$.skip(len - 3); // transparency index, dummy padding
 				if (dur)
 					return $.FoundAnimation();
 				len = $.read1();
-			} else if (type == 0xff && len == 11) {
+			} else if (type === 0xff && len === 11) {
 				if ($.avail < 12) yield $.Ensure(12);
 				var ext = $.read(11), exts = "";
 				for (var i = 0; i < 11; i++)
 					exts += String.fromCharCode(ext[i]);
 				len = $.read1();
-				if (exts == "NETSCAPE2.0" || exts == "ANIMEXTS1.0") {
+				if (exts === "NETSCAPE2.0" || exts === "ANIMEXTS1.0") {
 					while (len) {
 						len = Math.max(len, 3);
-						if ($.avail < len+1) yield $.Ensure(len+1);
+						if ($.avail < len + 1) yield $.Ensure(len + 1);
 						var subid = $.read1() & 0x7;
 						if (subid === 1) {
 							$.readU16(); // iteration count, 0 = inf
@@ -156,7 +155,7 @@ function* gifDecoder($) {
 			// Skip over trailing data and extensions that did not match anything
 			// above, per fx impl.
 			while (len) {
-				if ($.avail < len+1) yield $.Ensure(len+1);
+				if ($.avail < len + 1) yield $.Ensure(len + 1);
 				$.skip(len);
 				len = $.read1();
 			}
@@ -195,7 +194,7 @@ function* gifDecoder($) {
 		}
 
 		// Trailer
-		else if (type == 0x3b) {
+		else if (type === 0x3b) {
 			break;
 		}
 
@@ -248,9 +247,9 @@ function setFilterHandlers(filter, url, decoder, foundAnimation) {
 				this.skipping = 0;
 			}
 
-			if (this.bytearray != null) {
-				if (this.leftovers == null) {
-					if (this.avail != 0)
+			if (this.bytearray !== null) {
+				if (this.leftovers === null) {
+					if (this.avail !== 0)
 						this.leftovers = this.bytearray.subarray(this.index);
 				} else {
 					var buffer = new Uint8Array(new ArrayBuffer(this.avail));
@@ -267,7 +266,8 @@ function setFilterHandlers(filter, url, decoder, foundAnimation) {
 		longSkip(n) {
 			if (this.avail < n) {
 				n -= this.avail;
-				this.avail = this.index = 0;
+				this.avail = 0;
+				this.index = 0;
 				this.leftovers = null;
 				this.bytearray = null;
 				this.skipping = n;
@@ -284,7 +284,7 @@ function setFilterHandlers(filter, url, decoder, foundAnimation) {
 				throw new Error("must ensure space before reading!");
 			}
 
-			if (this.leftovers != null) {
+			if (this.leftovers !== null) {
 				if (n <= this.leftovers.length) {
 					ret = this.leftovers.subarray(0, n);
 					this.leftovers = (n === this.leftovers.length ? null : this.leftovers.subarray(n));
@@ -308,7 +308,7 @@ function setFilterHandlers(filter, url, decoder, foundAnimation) {
 				throw new Error("must ensure space before reading!");
 			}
 
-			if (this.leftovers != null) {
+			if (this.leftovers !== null) {
 				if (n < this.leftovers.length) {
 					this.leftovers = this.leftovers.subarray(n);
 				} else {
@@ -327,9 +327,9 @@ function setFilterHandlers(filter, url, decoder, foundAnimation) {
 				throw new Error("must ensure space before reading!");
 			}
 
-			if (this.leftovers != null) {
+			if (this.leftovers !== null) {
 				ret = this.leftovers[0];
-				this.leftovers = (1 === this.leftovers.length ? null : this.leftovers.subarray(1));
+				this.leftovers = (this.leftovers.length === 1 ? null : this.leftovers.subarray(1));
 			} else {
 				ret = this.bytearray[this.index];
 				this.index += 1;
@@ -370,13 +370,16 @@ function setFilterHandlers(filter, url, decoder, foundAnimation) {
 					throw new Error("yielded despite being able to continue");
 			} else if (s.type === 1) {
 				console.log("error in image decode: " + s.msg + " on " + url);
-				return done();
+				done();
+				return;
 			} else if (s.type === 2) {
 				foundAnimation();
-				return done();
+				done();
+				return;
 			} else if (s.type === 3) {
 				// successful parse
-				return done();
+				done();
+				return;
 			} else {
 				throw new Error("unknown event type " + s.type);
 			}
@@ -434,7 +437,7 @@ browser.commands.onCommand.addListener(function(command) {
 
 browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 	void sendResponse;
-	if (msg.type == "query-animated") {
+	if (msg.type === "query-animated") {
 		let who = {tabId: sender.tab.id, frameId: sender.frameId};
 		AnimatedUrlCache.checkAnimated(who, msg.url);
 	} else {
