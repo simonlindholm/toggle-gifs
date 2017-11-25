@@ -25,7 +25,7 @@ function isDataUrl(url) {
 function notifyAnimated(who, url) {
 	let msg = {type: "notify-animated", url};
 	browser.tabs.sendMessage(who.tabId, msg, {frameId: who.frameId})
-		.catch(console.error);
+		.catch(e => console.error(e));
 }
 
 var AnimatedUrlCache = {

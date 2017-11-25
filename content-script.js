@@ -60,7 +60,7 @@ function checkAnimated(img) {
 	} else if (v !== 2) {
 		animatedMap.set(key, 2);
 		browser.runtime.sendMessage({type: "query-animated", url})
-			.catch(console.error);
+			.catch(e => console.error(e));
 	}
 }
 

@@ -14,9 +14,6 @@ const defaultSettings = {
 	supportGifv: true,
 };
 let settings = null;
-let settingsPromise = browser.storage.local.get(defaultSettings)
-	.then(data => { settings = data; })
-	.catch(err => { console.error(err); });
 
 function keyDownEventToString(event) {
 	function keyToString(ev) {
@@ -48,13 +45,18 @@ let loadPromise = new Promise(resolve => {
 	window.addEventListener("load", resolve, false);
 });
 
-let defaultBehaviorPromise =
-	browser.browserSettings.imageAnimationBehavior.get({}).then(({value}) => value);
+let animationBehaviorPromise =
+	browser.browserSettings.imageAnimationBehavior.get({})
+		.then(({value}) => value)
+		.catch(e => {
+			throw new Error("unable to read image animation behavior: " + String(e));
+		});
 
 function setPref(pref, value) {
 	if (!(pref in settings)) throw new Error("changed unknown pref " + pref);
 	settings[pref] = value;
-	browser.storage.local.set({ [pref]: value }).catch(console.error);
+	browser.storage.local.set({ [pref]: value })
+		.catch(e => console.error(e));
 }
 
 function handleShortcutKeyDown(event) {
@@ -94,17 +96,29 @@ function handleRadioChange(event) {
 	setPref(pref, +value);
 }
 
+let settingsPromise = browser.storage.local.get(defaultSettings)
+	.then(data => { settings = data; })
+	.catch(e => {
+		throw new Error("unable to read settings: " + String(e));
+	});
+
 Promise.all([
 	loadPromise,
 	settingsPromise,
-	defaultBehaviorPromise,
-]).then(([, , behavior]) => {
+	animationBehaviorPromise,
+])
+.catch(e => {
+	document.body.textContent = "Unable to load preferences :(";
+	document.body.hidden = false;
+	throw e;
+})
+.then(([, , behavior]) => {
 	// Special: pause-by-default uses the global animation behavior setting
 	let pauseEl = document.getElementById("pause-by-default");
 	pauseEl.checked = (behavior === "none");
 	pauseEl.onchange = function() {
-		let val = this.checked ? "none" : "normal";
-		browser.browserSettings.imageAnimationBehavior.set({value: val}).catch(console.error);
+		let value = this.checked ? "none" : "normal";
+		browser.browserSettings.imageAnimationBehavior.set({value}).catch(e => console.error(e));
 	};
 
 	// Radio buttons, currently just with int values
