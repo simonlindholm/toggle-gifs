@@ -8,15 +8,7 @@ var LRU_CACHE_SIZE = 200;
 var LRU_WAITING_SIZE = 200;
 var MAX_URL_SIZE = 500;
 
-function sendMessageToActiveTab(msg) {
-	browser.tabs.query({
-		active: true,
-		currentWindow: true,
-	}).then(tabs =>
-			Promise.all(tabs.map(tab =>
-				browser.tabs.sendMessage(tab.id, msg))))
-		.catch(console.error);
-}
+var AnimationBehavior = null;
 
 function isDataUrl(url) {
 	return url.startsWith("data:");
@@ -422,25 +414,35 @@ browser.webRequest.onHeadersReceived.addListener(
 	["blocking", "responseHeaders"]
 );
 
-// TODO commands for shortcuts, or listen in content script
-/*
-browser.commands.onCommand.addListener(function(command) {
-	if (command == "toggle-gifs") {
-		console.log("ctrl+m pressed");
-		sendMessageToActiveTab({type: "toggle-gifs"});
-	} else if (command == "reset-gifs") {
-		console.log("shift+m pressed");
-		sendMessageToActiveTab({type: "reset-gifs"});
-	}
-});
-*/
+let animationBehaviorPromise =
+	browser.browserSettings.imageAnimationBehavior.get({})
+		.then(({value}) => {
+			if (AnimationBehavior === null)
+				AnimationBehavior = value;
+		})
+		.catch(e => {
+			throw new Error("unable to read image animation behavior: " + String(e));
+		});
 
 browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-	void sendResponse;
 	if (msg.type === "query-animated") {
 		let who = {tabId: sender.tab.id, frameId: sender.frameId};
 		AnimatedUrlCache.checkAnimated(who, msg.url);
+	} else if (msg.type === "query-animation-behavior") {
+		if (AnimationBehavior === null) {
+			animationBehaviorPromise.then(() => {
+				sendResponse(AnimationBehavior);
+			});
+			return true;
+		}
+		sendResponse(AnimationBehavior);
+	} else if (msg.type === "updated-pref") {
+		console.log("updated pref", msg.pref, msg.value);
+		if (msg.pref === "animation-behavior") {
+			AnimationBehavior = msg.value;
+		}
 	} else {
 		throw new Error("unknown message type");
 	}
+	return false;
 });

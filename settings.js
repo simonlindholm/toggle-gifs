@@ -56,6 +56,13 @@ function setPref(pref, value) {
 	if (!(pref in settings)) throw new Error("changed unknown pref " + pref);
 	settings[pref] = value;
 	browser.storage.local.set({ [pref]: value })
+		.then(() => {
+			browser.runtime.sendMessage({
+				type: "updated-pref",
+				pref,
+				value
+			});
+		})
 		.catch(e => console.error(e));
 }
 
@@ -119,6 +126,11 @@ Promise.all([
 	pauseEl.onchange = function() {
 		let value = this.checked ? "none" : "normal";
 		browser.browserSettings.imageAnimationBehavior.set({value}).catch(e => console.error(e));
+		browser.runtime.sendMessage({
+			type: "updated-pref",
+			pref: "animation-behavior",
+			value
+		}).catch(e => console.error(e));
 	};
 
 	// Radio buttons, currently just with int values
