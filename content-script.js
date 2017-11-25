@@ -2,6 +2,10 @@
 /* global browser */
 "use strict";
 
+// Put everything in a closure, to pre-emptively work around
+// https://bugzilla.mozilla.org/show_bug.cgi?id=1408996
+(function() {
+
 console.log("toggle-gifs content script", window);
 
 // 1 = yes, 2 = waiting.
@@ -92,3 +96,5 @@ function init() {
 }
 
 init();
+
+}());
