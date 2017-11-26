@@ -3,7 +3,7 @@
 "use strict";
 
 // Keep in sync with content-script.js!
-const defaultSettings = {
+const DefaultPrefs = {
 	hoverPauseWhen: 1,
 	hoverPlayOnLoad: false,
 	indicatorStyle: 0,
@@ -13,7 +13,6 @@ const defaultSettings = {
 	showOverlays: true,
 	supportGifv: true,
 };
-let settings = null;
 
 function keyDownEventToString(event) {
 	function keyToString(ev) {
@@ -41,6 +40,8 @@ function keyDownEventToString(event) {
 }
 // end keep in sync
 
+let Prefs = null;
+
 let loadPromise = new Promise(resolve => {
 	window.addEventListener("load", resolve, false);
 });
@@ -53,8 +54,8 @@ let animationBehaviorPromise =
 		});
 
 function setPref(pref, value) {
-	if (!(pref in settings)) throw new Error("changed unknown pref " + pref);
-	settings[pref] = value;
+	if (!(pref in Prefs)) throw new Error("changed unknown pref " + pref);
+	Prefs[pref] = value;
 	browser.storage.local.set({ [pref]: value })
 		.then(() => {
 			browser.runtime.sendMessage({
@@ -103,10 +104,10 @@ function handleRadioChange(event) {
 	setPref(pref, +value);
 }
 
-let settingsPromise = browser.storage.local.get(defaultSettings)
-	.then(data => { settings = data; })
+let settingsPromise = browser.storage.local.get(DefaultPrefs)
+	.then(data => { Prefs = data; })
 	.catch(e => {
-		throw new Error("unable to read settings: " + String(e));
+		throw new Error("unable to read prefs: " + String(e));
 	});
 
 Promise.all([
@@ -136,7 +137,7 @@ Promise.all([
 	// Radio buttons, currently just with int values
 	for (let pref of ["hoverPauseWhen"]) {
 		let els = document.getElementsByName(pref);
-		let val = settings[pref];
+		let val = Prefs[pref];
 		for (let el of els) {
 			if (+el.value === val) el.checked = true;
 			el.addEventListener("change", handleRadioChange, false);
@@ -147,7 +148,7 @@ Promise.all([
 	for (let el of document.querySelectorAll("[data-pref]")) {
 		let name = el.getAttribute("data-pref");
 		let type = el.getAttribute("data-type");
-		var pr = settings[name];
+		var pr = Prefs[name];
 		if (type === "shortcut") {
 			if (typeof pr !== "string") throw new Error("must be a string pref");
 			el.addEventListener("keydown", handleShortcutKeyDown, false);

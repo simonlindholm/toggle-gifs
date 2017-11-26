@@ -6,8 +6,10 @@
 // https://bugzilla.mozilla.org/show_bug.cgi?id=1408996
 (function() {
 
+// ==== Constants ====
+
 // Keep in sync with settings.js!
-const defaultSettings = {
+const DefaultPrefs = {
 	hoverPauseWhen: 1,
 	hoverPlayOnLoad: false,
 	indicatorStyle: 0,
@@ -17,8 +19,118 @@ const defaultSettings = {
 	showOverlays: true,
 	supportGifv: true,
 };
-let settings = null;
 
+// From http://chrfb.deviantart.com/, licensed under CC by-nc-sa.
+const PauseIcon =
+	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAATCAYAAACKsM07AAAAB" +
+	"HNCSVQICAgIfAhkiAAAAAlwSFlzAAAN1wAADdcBQiibeAAAABl0RVh0U29mdHdhcmUAd3d3" +
+	"Lmlua3NjYXBlLm9yZ5vuPBoAAACkSURBVDiN5ZQxDsIwDEV/ECNrR6ReJcehc4/BDBdBXXM" +
+	"XGLuyxN9SWRrBkroeGAp/+3qynhRbCagkpXQIIRwBYJqmR4zx6eElu5pARDqSA8lBRDovNw" +
+	"Wq2pNsSbaq2nt5yb4GSDYftfFyU5BzrqFV3BSIyOKgxf9A8PUdkFwctLgp2P4Tbf+KfmIHI" +
+	"96f2OjlpoDkGcBprlcvXyO4ALjN9e7lJS8fua+AWjO1xwAAAABJRU5ErkJggg==";
+const PlayIcon =
+	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAATCAYAAACKsM07AAAAB" +
+	"HNCSVQICAgIfAhkiAAAAAlwSFlzAAAN1wAADdcBQiibeAAAABl0RVh0U29mdHdhcmUAd3d3" +
+	"Lmlua3NjYXBlLm9yZ5vuPBoAAAF/SURBVDiNtZQxSwNBEIVn9kyfQrRV8DeIhZWdfyCpA6b" +
+	"WwtRyBFKI2qQ5mxPigUqaKxIh6QLpBUsRBBELAyEpPJKdc5+NQtDcuYn6YOHY2XvfvhlYog" +
+	"R1Op1VACqpbqtEA631ZbvdLrRaraV/AYjIujHmREROm83m9rwATiqEYYiPTwB4IaLr0Wh04" +
+	"DjOcy6Xe7MFpLXoc7GILItIwXGcWwD7tVptDUDi5awSBEGApBqArjHmTGsdFovF/m8TfFsi" +
+	"shnH8TEz+77vb82VwPO8xAQTMgD6xpgwiqK9Uqn0+vXAQtKf4/HYwp8UES0S0U4mk4mIaNc" +
+	"aoLW2AUxqY9rmXwHuiGh/JoBFi0BEfSK6YOay67q9mQBpCQCMlFJdZj6qVCqttFvMA3hkZk" +
+	"9rfV6tVp/SzFMBIjJtu6mUKmez2RvXda2G9OMMAMTM/ACgPBgMrur1+kzTT20RgJ5SKhSRw" +
+	"yAI7mcxtgF0mbk6HA4bjUYjmsc8Vfl8foVSnhJbvQNA+d4NuYFf9AAAAABJRU5ErkJggg==";
+const ResetIcon =
+	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAATCAYAAACKsM07AAAAB" +
+	"HNCSVQICAgIfAhkiAAAAAlwSFlzAAAN1wAADdcBQiibeAAAABl0RVh0U29mdHdhcmUAd3d3" +
+	"Lmlua3NjYXBlLm9yZ5vuPBoAAAMsSURBVDiNlZNPaGNVFMa/k5dnzTQkrTgTB7StSFGclSJ" +
+	"tM45Q0IXgoCAWcVFRYRYpjqi1dOEiNIjQdopmU2gNJTPdVRelhRbrImRMKVJUtJ3SWbQ7/y" +
+	"wUBt740vvnvOOmKUmadNoDZ3Hf+e73u/ecd4GzBa2urnY9SCQiVCgUugAgfFrnpaWlc67rX" +
+	"nVd9zqAl5rpCoVCdG1t7arjOB8CuHIqwPLycjcRjYjIG1rrC810i4uLz/q+P0xErzPzow+8" +
+	"wcLCwkPhcPgdZv5cRJ4kojAAqdetrKy0HBwcfCAinxljOqp9GwKy2WxLIpF4DkDaWvtq5Ts" +
+	"RaQA/V9YzMzPnYrFYj+d5GSJq2LZjgLm5uSdc1x201qYAPF5V+jcUCt0koq8BYH5+/mkReZ" +
+	"eZrzHz+WZdqAHkcrnXROQTY8yLAB6uKm07jpMOguD7vb29ci6XG9Rap4joBQBuM/MjwNTUV" +
+	"CQSidyw1r4tIo8QER3WAxH5NhKJDO/v7/8Vi8XaEonELWPMy0QUP8m4BuA4zpgxZqi+SES7" +
+	"5XL5WiqV8gAgm81mjTFvnsa4BmCtvSJy7OdAEAR3R0dHvQpPa91zFnMACB0CPtVa39Faozq" +
+	"NMf2ZTOa9Q60w88fGmD/qdc0SACq9RjqdvgDgSxF5C8BRf0XEBzATCoW+AHDPWtsZDoe/Ep" +
+	"FXALSedPpMJkNOZVEsFv8rFotLfX19f4pIFzM/xswUBIEbBEHSWvu87/u7ExMTd/r7+78zx" +
+	"njM3MnM55kZjbJUKo059dT19fXfksnkJjO3MPMlZnaYGUEQPAXgcm9v7/3x8fFfS6XST8lk" +
+	"8ndmjjLzM8wcqgdsbGyMhRpdbXJy8hfP80aY+brW+p4xBsYYWGsvWWtvVOl+LJfLH1lrR4w" +
+	"x9yu6Sh4NuVHMzs7+09bW9o0xpkcp9YNSyldKwRhT82qnp6f/bm9vzyqlLmutbyulykopKK" +
+	"Vqh3xSDA0NRX3fHxaR94moM5/PN9w3MDAQb21tHQEwCKAjn8/TsRk0is3NTd3d3V0CsMvMF" +
+	"7e2tm410u3s7Kh4PH47Go3etdZe3N7evnka//pTdpxF9z+OKu4QyrEbkgAAAABJRU5ErkJg" +
+	"gg==";
+
+const HoverPause = {Never: 0, Next: 1, Unhover: 2, ClickOutside: 3};
+
+const ButtonsMinWidth = 60, ButtonsMinHeight = 40;
+
+const OverlayCss = `
+#toggleGifsOverlay, #toggleGifsOverlay * {
+   all: initial;
+   border: none !important;
+   margin: 0 !important;
+   padding: 0 !important;
+   box-sizing: content-box !important;
+}
+#toggleGifsOverlay {
+   position: absolute !important;
+   z-index: 2147483647 !important;
+}
+#toggleGifsOverlay > #toggleGifsContent {
+   position: absolute !important;
+   top: 0 !important;
+   right: 0 !important;
+   max-width: none !important;
+   text-align: right !important;
+   white-space: nowrap !important;
+}
+#toggleGifsResetButton, #toggleGifsPauseButton {
+   width: 24px !important;
+   height: 25px !important;
+   display: inline-block !important;
+   background-repeat: no-repeat !important;
+   background-position: 0 3px !important;
+   cursor: pointer !important;
+}`;
+
+// Animation state for the document, either "none", "once" or "normal".
+// Set upon init, when the parent tells us the right value.
+var AnimationBehavior = null;
+
+// ==== Global state ====
+
+var CurrentHover = null;
+var LastToggledImage = null;
+var AnimationIndicators = new Set();
+var Prefs = null;
+
+// 1 = yes, 2 = waiting.
+// No signal for "no", because some requests might never hit the network,
+// and some may have done, but have since been evicted from the parent cache.
+// A timer could work, I guess, but for now let's try to do without it.
+// For simplicity we let this leak without bounds, because it will vanish
+// when the tab closes. (An LRU cache would also be an option, but then
+// resetGifsInWindow would have to change.)
+var AnimatedMap = new Map();
+
+// ==== Expando symbols ====
+
+// TODO make eInjectedCss, eInjectedSVG into globals
+
+var eTooSmall = "toggleGifs-tooSmall";
+var eInjectedCss = "toggleGifs-injectedCss";
+var eInjectedSvg = "toggleGifs-injectedSvg";
+var eShownIndicator = "toggleGifs-shownIndicator";
+var eAttachedLoadWaiter = "toggleGifs-attachedLoadWaiter";
+var eInitedGif = "toggleGifs-initedGif";
+var eRelatedTo = "toggleGifs-relatedTo";
+var eFakeImage = "toggleGifs-fakeImage";
+var eHandledPinterest = "toggleGifs-handledPinterest";
+var ePositionAsIf = "toggleGifs-positionAsIf";
+
+// ==== Helpers ====
+
+// Keep in sync with settings.js!
 function keyDownEventToString(event) {
 	function keyToString(ev) {
 		let {which, key} = ev;
@@ -42,24 +154,6 @@ function keyDownEventToString(event) {
 	}
 	var key = keyToString(event), accel = accelToString(event);
 	return key ? accel + key : "";
-}
-// end keep in sync
-
-var AnimationBehavior = null; // "none", "once" or "normal"
-
-// 1 = yes, 2 = waiting.
-// No signal for "no", because some requests might never hit the network,
-// and some may have done, but have since been evicted from the parent cache.
-// A timer could work, I guess, but for now let's try to do without it.
-// For simplicity we let this leak without bounds, because it will vanish
-// when the tab closes. (An LRU cache would also be an option.)
-var AnimatedMap = new Map();
-
-function updatePref(pref, value) {
-	// XXX support all prefs here, or just a subset?
-	// indicatorStyle might require special handling
-	console.log("updated setting", pref, value);
-	settings[pref] = value;
 }
 
 // Needed due to https://bugzilla.mozilla.org/show_bug.cgi?id=1369841.
@@ -89,21 +183,185 @@ function hash(url) {
 	return url.substr(0, 240) + url.substr(-10) + url.length;
 }
 
-function toggleGifs() {
-	console.log("toggle gifs", window);
+function cancelEvent(event) {
+	event.stopPropagation();
+	event.preventDefault();
+}
+
+function forEachAnimationIndicator(func) {
+	for (var el of AnimationIndicators) {
+		try {
+			func(el);
+		} catch (ex) {
+			// Dead wrappers or some other bad thing about the image. Remove it from the list.
+			AnimationIndicators.delete(el);
+			throw ex; // TODO don't! just make sure parameters are passed correctly
+		}
+	}
+}
+
+function inViewport(el) {
+	if (!(el instanceof HTMLElement)) throw new Error("changed parameters!"); // TODO remove me
+	el = el[ePositionAsIf] || el;
+	if (el.ownerDocument !== document || !document.contains(el))
+		return false;
+	if (window.getComputedStyle(el).display === "none")
+		return false;
+	var re = el.getClientRects()[0];
+	return (re && re.bottom > 0 && re.top < window.innerHeight);
+}
+
+function isLeftClick(event) {
+	return event.which === 1;
+}
+
+function isGifv(el) {
+	// As of June 2015. Should probably be re-checked...
+	if (el.localName !== "video" || !Prefs.supportGifv)
+		return false;
+	if (el.hasAttribute("muted") && el.hasAttribute("autoplay") &&
+		((el.getAttribute("poster") || "").indexOf("i.imgur") !== -1)) {
+		// Imgur. imgur.com has its own play indicator on mobile, respect that.
+		return (el.ownerDocument.location.host !== "m.imgur.com");
+	}
+	if (el.hasAttribute("controls"))
+		return false;
+	if (el.id === "mainVid0" || el.classList.contains("gfyVid")) // gfycat
+		return true;
+	return el.hasAttribute("muted") && el.hasAttribute("loop") && el.hasAttribute("autoplay");
+}
+
+function hasLoaded(el) {
+	return isGifv(el) || el.complete;
+}
+
+function imageTooSmall(el) {
+	var ret = el[eTooSmall];
+	if (ret !== undefined)
+		return ret;
+	if (el.width && el.height)
+		ret = (el.width < ButtonsMinWidth || el.height < ButtonsMinHeight);
+	else
+		ret = (el.offsetWidth < ButtonsMinWidth || el.offsetHeight < ButtonsMinHeight);
+	el[eTooSmall] = ret;
+	return ret;
+}
+
+function resetImageAnimation(img) {
+	if (isGifv(img)) {
+		img.currentTime = 0;
+	} else {
+		// Funnily enough, the standard guarantees this to work, without side effects:
+		// https://html.spec.whatwg.org/multipage/images.html#reacting-to-dom-mutations
+		img.src = img.src;
+	}
+}
+
+function resetImageAnimationForUrl(url) {
+	// This rests on slightly shakier ground, in that it doesn't work in Chrome.
+	new Image().src = url;
+}
+
+function setGifState(img, state) {
 	// TODO
 }
 
-function resetGif(img) {
-	// Funnily enough, the standard guarantees this to work, without side effects:
-	// https://html.spec.whatwg.org/multipage/images.html#reacting-to-dom-mutations
-	img.src = img.src;
+// ==== Application logic ====
+
+// ==== Click listeners ====
+
+function onClick(event) {
+	if (!isLeftClick(event) || CurrentHover)
+		return;
+	if (LastToggledImage) {
+		// TODO stop gif if playing
+	}
+	LastToggledImage = null;
+	forEachAnimationIndicator(el => {
+		updateIndicator(el, true);
+	});
 }
 
-function resetGifs() {
-	console.log("reset gifs", window);
-	for (var img of document.getElementsByTagName("img"))
-		resetGif(img);
+function updateClickListeners() {
+	var shouldAdd = (Prefs.hoverPauseWhen === HoverPause.ClickOutside);
+	if (shouldAdd)
+		window.addEventListener("click", onClick);
+	else
+		window.removeEventListener("click", onClick);
+}
+
+// ==== Key listeners ====
+
+function resetGifsInWindow() {
+	var any = false, el;
+	for (el of document.getElementsByTagName("video")) {
+		if (isGifv(el)) {
+			resetImageAnimation(el);
+			any = true;
+		}
+	}
+
+	// Iterate the list of URLs to also include CSS background images.
+	for (var pair of AnimatedMap.entries()) {
+		if (pair[1] === 1)
+			resetImageAnimationForUrl(pair[0]);
+	}
+
+	// But iterate actual images to know whether anything was actually reset.
+	for (el of document.getElementsByTagName("img")) {
+		if (AnimatedMap.has(el.src))
+			any = true;
+	}
+	return any;
+}
+
+function toggleGifsInWindow() {
+	var any = false;
+	for (var el of document.getElementsByTagName("video")) {
+		if (isGifv(el)) {
+			// TODO pause gifv
+			resetImageAnimation(el);
+			any = true;
+		}
+	}
+	any = any || !!AnimatedMap.size;
+	// TODO
+	return any;
+}
+
+function onKeydown(event) {
+	if (event.defaultPrevented)
+		return;
+	var str = keyDownEventToString(event);
+	if (!str || !(str === Prefs.shortcutToggle || str === Prefs.shortcutReset))
+		return;
+
+	// In case of modifier-less binding, we want to be a bit careful and
+	// only cancel the event in case the shortcut actually had an effect.
+	var shouldCancel = (event.ctrlKey || event.metaKey || event.altKey);
+
+	if (str === Prefs.shortcutToggle)
+		shouldCancel = toggleGifsInWindow() || shouldCancel;
+
+	if (str === Prefs.shortcutReset)
+		shouldCancel = resetGifsInWindow() || shouldCancel;
+
+	if (shouldCancel)
+		cancelEvent(event);
+}
+
+// ==== Overlay ====
+
+function updateKeyListeners() {
+	var shouldAdd = (Prefs.shortcutToggle || Prefs.shortcutReset);
+	if (shouldAdd)
+		window.addEventListener("keydown", onKeydown);
+	else
+		window.removeEventListener("keydown", onKeydown);
+}
+
+function updateIndicator(el, initial) {
+	// TODO
 }
 
 function markAnimated(img) {
@@ -111,8 +369,11 @@ function markAnimated(img) {
 		return;
 	img.toggleGifsHasCheckedAnimation = true;
 
+	// TODO
 	img.style.border = "2px solid red";
 }
+
+// ==== Animation detection ====
 
 function notifyAnimated(url) {
 	console.log("found animated gif", url);
@@ -137,40 +398,57 @@ function handleLoadStart(img) {
 	checkAnimated(img);
 }
 
+// ==== Initialization ====
+
+function updatePref(pref, value) {
+	// TODO support all prefs here, or just a subset?
+	// indicatorStyle might require special handling
+	console.log("updated setting", pref, value);
+	Prefs[pref] = value;
+	if (pref === "shortcutReset" || pref === "shortcutToggle")
+		updateKeyListeners();
+	if (pref === "hoverPauseWhen")
+		updateClickListeners();
+}
+
 function init() {
 	// Don't do *anything* if this frame is a dummy frame created by ourselves.
 	let fr = window.frameElement;
 	if (fr && fr.hasAttribute("toggle-gifs-frame"))
 		return;
 
-	let settingsPromise = browser.storage.local.get(defaultSettings)
-		.then(data => { settings = data; })
+	let settingsPromise = browser.storage.local.get(DefaultPrefs)
+		.then(data => { Prefs = data; })
 		.catch(e => {
-			throw new Error("unable to read settings: " + String(e));
+			throw new Error("unable to read prefs: " + String(e));
 		});
 
-	let animationBehaviorPromise =
-		sendMessageWithRetry({type: "query-animation-behavior"});
+	let animationBehaviorPromise = sendMessageWithRetry({type: "query-animation-behavior"})
+		.then(behavior => {
+			// Assume 'behavior', as just queried from the global pref, is correct
+			// for our presContext. This should hold with >99% probability.
+			AnimationBehavior = behavior;
+		});
 
 	let loadedPromise = Promise.all([
 		settingsPromise,
 		animationBehaviorPromise,
 	]);
 
-	var hasLoaded = false;
+	var inited = false;
 	var loadStartQueue = [];
 
 	settingsPromise.then(() => {
 		browser.storage.onChanged.addListener((changes, area) => {
 			if (area !== "local")
 				return;
-			for (var prop in changes) {
-				if (prop in defaultSettings) {
-					let val = changes[prop].newValue;
-					if (hasLoaded) {
-						updatePref(prop, val);
+			for (var pref in changes) {
+				if (pref in DefaultPrefs) {
+					let val = changes[pref].newValue;
+					if (inited) {
+						updatePref(pref, val);
 					} else {
-						settings[prop] = val;
+						Prefs[pref] = val;
 					}
 				}
 			}
@@ -180,7 +458,7 @@ function init() {
 	function onLoadStart(event) {
 		var img = event.target;
 		if (img.tagName !== "IMG") return;
-		if (hasLoaded)
+		if (inited)
 			handleLoadStart(img);
 		else
 			loadStartQueue.push(img);
@@ -188,21 +466,15 @@ function init() {
 
 	document.addEventListener("loadstart", onLoadStart, true);
 
-	loadedPromise.then(([, behavior]) => {
-		console.log("content-script init", behavior);
-		hasLoaded = true;
+	loadedPromise.then(() => {
+		console.log("content-script init", AnimationBehavior);
+		inited = true;
 
-		// Assume 'behavior', as just queried from the global pref, is correct
-		// for our docshell. This should hold with >99% probability.
-		AnimationBehavior = behavior;
+		updateKeyListeners();
+		updateClickListeners();
 
-		browser.runtime.onMessage.addListener((request, sender, sendResponse) => {
-			void sendResponse;
-			if (request.type === "toggle-gifs") {
-				toggleGifs();
-			} else if (request.type === "reset-gifs") {
-				resetGifs();
-			} else if (request.type === "notify-animated") {
+		browser.runtime.onMessage.addListener(request => {
+			if (request.type === "notify-animated") {
 				notifyAnimated(request.url);
 			} else {
 				throw new Error("unknown request type");
@@ -210,7 +482,11 @@ function init() {
 		});
 
 		for (let img of loadStartQueue) {
-			handleLoadStart(img);
+			try {
+				handleLoadStart(img);
+			} catch (e) {
+				console.error(e);
+			}
 		}
 		loadStartQueue = null;
 	});
