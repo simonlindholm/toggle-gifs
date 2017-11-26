@@ -121,9 +121,9 @@ var AnimatedMap = new Map();
 var eAnimationMode = "toggleGifs-animationMode";
 var eCurrentState = "toggleGifs-currentState";
 var eCheckedAnimation = "toggleGifs-checkedAnimation";
+var eHasHovered = "toggleGifs-hasHovered";
 var eTooSmall = "toggleGifs-tooSmall";
 var eShownIndicator = "toggleGifs-shownIndicator";
-var eAttachedLoadWaiter = "toggleGifs-attachedLoadWaiter";
 var eInitedGif = "toggleGifs-initedGif";
 var eRelatedTo = "toggleGifs-relatedTo";
 var eFakeImage = "toggleGifs-fakeImage";
@@ -188,6 +188,10 @@ function hash(url) {
 function cancelEvent(event) {
 	event.stopPropagation();
 	event.preventDefault();
+}
+
+function noop() {
+	// Do nothing.
 }
 
 // TODO changed signature, double-check callers
@@ -301,7 +305,7 @@ function onClick(event) {
 		setAnimationState(LastToggledImage, "none");
 	}
 	LastToggledImage = null;
-	forEachAnimationIndicator(e => updateIndicator(e, true));
+	forEachAnimationIndicator(updateIndicator);
 }
 
 function updateClickListeners() {
@@ -355,7 +359,7 @@ function toggleImagesInWindow() {
 
 	if (CurrentHover)
 		CurrentHover.refresh();
-	forEachAnimationIndicator(e => updateIndicator(e, true));
+	forEachAnimationIndicator(updateIndicator);
 
 	return any || AnimatedMap.size > 0;
 }
@@ -440,10 +444,179 @@ function injectIndicatorSvg() {
 	document.documentElement.appendChild(svg);
 }
 
-function updateIndicator(el, initial = false) {
-	void el;
-	void initial;
-	// TODO
+function updateIndicator(el) {
+	if (Prefs.indicatorStyle === 0 || imageTooSmall(el))
+		return;
+
+	var shouldShow = (getAnimationState(el) !== "normal");
+	if (Prefs.showOverlays && CurrentHover && CurrentHover.element === el) {
+		shouldShow = false;
+	}
+
+	if (shouldShow) {
+		if (Prefs.indicatorStyle === 1) {
+			injectIndicatorSvg();
+			el.style.filter = "url(#toggleGifsIndicatorFilter)";
+		}
+		else if (Prefs.indicatorStyle === 2) {
+			// We don't want to do this twice, since it looks weird.
+			if (!el[eShownIndicator]) {
+				el.style.transition = "opacity 0.4s";
+				el.style.opacity = "0.2";
+			}
+			el[eShownIndicator] = true;
+		}
+	}
+	else {
+		if (Prefs.indicatorStyle === 1)
+			el.style.filter = "none";
+		else if (Prefs.indicatorStyle === 2)
+			el.style.opacity = "1";
+	}
+
+	if (el.tagName === "VIDEO" && !AnimationIndicators.has(el)) {
+		// A playing video with an SVG filter kills performance, so as a safety measure,
+		// remove the indicator again if the video is played by script.
+		el.addEventListener("play", event => {
+			updateIndicator(event.target);
+		});
+	}
+	AnimationIndicators.add(el);
+}
+
+function updateAllIndicators(prev, cur) {
+	if (prev > 0 && cur === 0) {
+		forEachAnimationIndicator(el => {
+			el.style.filter = "";
+			el.opacity = "";
+		});
+		AnimationIndicators = [];
+	} else if (prev === 0 && cur > 0) {
+		// TODO
+	}
+}
+
+function applyHoverEffect(el) {
+	CurrentHover = {
+		element: el,
+		playing: null,
+		overlay: null,
+		mouseoutTimeout: null,
+		clearTimeouts() {
+			if (this.mouseoutTimeout) {
+				window.clearTimeout(this.mouseoutTimeout);
+				this.mouseoutTimeout = null;
+			}
+		},
+		toggleImageAnimation() {
+			LastToggledImage = el;
+			this.playing = !this.playing;
+			setAnimationState(el, this.playing ? "normal" : "none");
+			this.setPauseButtonAppearance();
+		},
+		refresh() {
+			this.playing = (getAnimationState(el) === "normal");
+			this.setPauseButtonAppearance();
+		},
+		setPauseButtonAppearance: noop
+	};
+
+	initGifState(el);
+	CurrentHover.refresh();
+
+	if (Prefs.playOnHover && !CurrentHover.playing) {
+		if (LastToggledImage !== el) {
+			if (LastToggledImage && Prefs.hoverPauseWhen === HoverPause.Next) {
+				setAnimationState(LastToggledImage, "none");
+				updateIndicator(LastToggledImage);
+			}
+
+			if (Prefs.hoverPlayOnLoad && !hasLoaded(el)) {
+				LastToggledImage = el;
+				el[eHasHovered] = true;
+			}
+			else {
+				CurrentHover.toggleImageAnimation();
+				updateIndicator(el);
+			}
+		}
+	}
+
+	if (!Prefs.showOverlays || imageTooSmall(el))
+		return;
+
+	updateIndicator(el);
+
+	injectOverlayCss();
+
+	var overlay = document.createElement("div");
+	overlay.id = "toggleGifsOverlay";
+
+	// (For defense against page listeners, all of these listeners should
+	// really be registered on the document.)
+	var resetButton = document.createElement("span");
+	resetButton.id = "toggleGifsResetButton";
+	resetButton.style.backgroundImage = "url(" + ResetIcon + ")";
+	resetButton.addEventListener("mousedown", event => {
+		if (!isLeftClick(event))
+			return;
+		resetImageAnimation(el);
+		cancelEvent(event);
+	}, true);
+	resetButton.addEventListener("click", cancelEvent, true);
+	resetButton.addEventListener("mouseup", cancelEvent, true);
+
+	var pauseButton = document.createElement("span");
+	pauseButton.id = "toggleGifsPauseButton";
+	CurrentHover.setPauseButtonAppearance = () => {
+		pauseButton.style.backgroundImage =
+			"url(" + (CurrentHover.playing ? PauseIcon : PlayIcon) + ")";
+	};
+	CurrentHover.setPauseButtonAppearance();
+	pauseButton.addEventListener("mousedown", event => {
+		if (!isLeftClick(event))
+			return;
+		CurrentHover.toggleImageAnimation();
+		cancelEvent(event);
+	}, true);
+	pauseButton.addEventListener("click", cancelEvent, true);
+	pauseButton.addEventListener("mouseup", cancelEvent, true);
+
+	var content = document.createElement("span");
+	content.id = "toggleGifsContent";
+	content.appendChild(resetButton);
+	content.appendChild(pauseButton);
+	overlay.appendChild(content);
+
+	var offsetBase = el[ePositionAsIf] || el;
+	function reposition() {
+		var par = offsetBase.offsetParent;
+		var x = offsetBase.offsetLeft, y = offsetBase.offsetTop;
+
+		// Skip past <td>s and <table>s, which appear in the offsetParent tree
+		// despite not being positioned.
+		while (par && par.localName !== "body" &&
+				window.getComputedStyle(par).position === "static") {
+			x += par.offsetLeft;
+			y += par.offsetTop;
+			par = par.offsetParent;
+		}
+
+		par = par || document.body;
+		var style = window.getComputedStyle(offsetBase);
+		y += parseFloat(style.borderTopWidth);
+		x += offsetBase.offsetWidth - parseFloat(style.borderLeftWidth);
+		overlay.style.top = y + "px";
+		overlay.style.left = x + "px";
+		par.appendChild(overlay);
+	}
+	reposition();
+
+	CurrentHover.overlay = overlay;
+
+	var mo = new window.MutationObserver(reposition);
+	mo.observe(el, {attributes: true});
+	CurrentHover.mo = mo;
 }
 
 function markAnimated(img) {
@@ -506,6 +679,35 @@ function updateHoverListeners() {
 	addEventListener("mouseout", onMouseOut);
 }
 
+function initGifState(el) {
+	void el;
+	// TODO
+}
+
+function onLoad(event) {
+	console.log("onload", event); // TODO temporary
+	var el = event.target;
+	if (el.tagName !== "IMG")
+		return;
+
+	initGifState(el);
+
+	if (Prefs.playOnHover && Prefs.hoverPlayOnLoad &&
+		(Prefs.hoverPauseWhen === HoverPause.Never || LastToggledImage === el) &&
+		el[eHasHovered] && isAnimatedImage(el) && getAnimationState(el) === "none")
+	{
+		setAnimationState(el, "normal");
+		updateIndicator(el);
+		if (CurrentHover)
+			CurrentHover.refresh();
+	}
+}
+
+function onLoadedMetadata(event) {
+	if (isGifv(event.target))
+		initGifState(event.target);
+}
+
 // ==== Animation detection ====
 
 function notifyAnimated(url) {
@@ -535,6 +737,7 @@ function handleLoadStart(img) {
 
 function updatePref(pref, value) {
 	console.log("updated setting", pref, value);
+	var last = Prefs[pref];
 	Prefs[pref] = value;
 	if (pref === "shortcutReset" || pref === "shortcutToggle")
 		updateKeyListeners();
@@ -542,7 +745,8 @@ function updatePref(pref, value) {
 		updateClickListeners();
 	if (pref === "showOverlays" && !value)
 		clearHoverEffect();
-	// TODO indicatorStyle
+	if (pref === "indicatorStyle")
+		updateAllIndicators(last, value);
 }
 
 function init() {
@@ -600,6 +804,8 @@ function init() {
 	}
 
 	document.addEventListener("loadstart", onLoadStart, true);
+	document.addEventListener("load", onLoad, true);
+	window.addEventListener("loadedmetadata", onLoadedMetadata, true);
 
 	loadedPromise.then(() => {
 		console.log("content-script init", AnimationBehavior);
