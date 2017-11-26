@@ -99,9 +99,12 @@ var AnimationBehavior = null;
 
 // ==== Global state ====
 
+var WantedAnimationBehavior = null;
 var CurrentHover = null;
 var LastToggledImage = null;
 var AnimationIndicators = new Set();
+var HasInjectedCss = false;
+var HasInjectedSvg = false;
 var Prefs = null;
 
 // 1 = yes, 2 = waiting.
@@ -110,16 +113,15 @@ var Prefs = null;
 // A timer could work, I guess, but for now let's try to do without it.
 // For simplicity we let this leak without bounds, because it will vanish
 // when the tab closes. (An LRU cache would also be an option, but then
-// resetGifsInWindow would have to change.)
+// resetImagesInWindow would have to change.)
 var AnimatedMap = new Map();
 
 // ==== Expando symbols ====
 
-// TODO make eInjectedCss, eInjectedSVG into globals
-
+var eAnimationMode = "toggleGifs-animationMode";
+var eCurrentState = "toggleGifs-currentState";
+var eCheckedAnimation = "toggleGifs-checkedAnimation";
 var eTooSmall = "toggleGifs-tooSmall";
-var eInjectedCss = "toggleGifs-injectedCss";
-var eInjectedSvg = "toggleGifs-injectedSvg";
 var eShownIndicator = "toggleGifs-shownIndicator";
 var eAttachedLoadWaiter = "toggleGifs-attachedLoadWaiter";
 var eInitedGif = "toggleGifs-initedGif";
@@ -188,20 +190,20 @@ function cancelEvent(event) {
 	event.preventDefault();
 }
 
+// TODO changed signature, double-check callers
 function forEachAnimationIndicator(func) {
 	for (var el of AnimationIndicators) {
 		try {
 			func(el);
 		} catch (ex) {
-			// Dead wrappers or some other bad thing about the image. Remove it from the list.
+			// Let's be defensive.
 			AnimationIndicators.delete(el);
-			throw ex; // TODO don't! just make sure parameters are passed correctly
+			console.error(ex);
 		}
 	}
 }
 
 function inViewport(el) {
-	if (!(el instanceof HTMLElement)) throw new Error("changed parameters!"); // TODO remove me
 	el = el[ePositionAsIf] || el;
 	if (el.ownerDocument !== document || !document.contains(el))
 		return false;
@@ -248,7 +250,7 @@ function imageTooSmall(el) {
 }
 
 function resetImageAnimation(img) {
-	if (isGifv(img)) {
+	if (img.tagName === "VIDEO") {
 		img.currentTime = 0;
 	} else {
 		// Funnily enough, the standard guarantees this to work, without side effects:
@@ -257,13 +259,35 @@ function resetImageAnimation(img) {
 	}
 }
 
-function resetImageAnimationForUrl(url) {
-	// This rests on slightly shakier ground, in that it doesn't work in Chrome.
-	new Image().src = url;
+function getAnimationState(el) {
+	if (el.tagName === "VIDEO") {
+		return el.paused ? "none" : "normal";
+	} else {
+		return el[eCurrentState] || AnimationBehavior;
+	}
 }
 
-function setGifState(img, state) {
-	// TODO
+function setAnimationState(el, state) {
+	if (el.tagName === "VIDEO") {
+		if (state === "normal")
+			el.play();
+		else
+			el.pause();
+	} else {
+		var currentState = el[eCurrentState] || AnimationBehavior;
+		if (currentState === state)
+			return;
+		el[eCurrentState] = state;
+		// TODO
+	}
+}
+
+function isAnimatedImage(el) {
+	if (el.tagName === "VIDEO") {
+		return isGifv(el);
+	} else {
+		return el.tagName === "IMG" && AnimatedMap.has(el.src);
+	}
 }
 
 // ==== Application logic ====
@@ -274,12 +298,10 @@ function onClick(event) {
 	if (!isLeftClick(event) || CurrentHover)
 		return;
 	if (LastToggledImage) {
-		// TODO stop gif if playing
+		setAnimationState(LastToggledImage, "none");
 	}
 	LastToggledImage = null;
-	forEachAnimationIndicator(el => {
-		updateIndicator(el, true);
-	});
+	forEachAnimationIndicator(e => updateIndicator(e, true));
 }
 
 function updateClickListeners() {
@@ -292,41 +314,50 @@ function updateClickListeners() {
 
 // ==== Key listeners ====
 
-function resetGifsInWindow() {
-	var any = false, el;
-	for (el of document.getElementsByTagName("video")) {
-		if (isGifv(el)) {
-			resetImageAnimation(el);
-			any = true;
+function resetImagesInWindow() {
+	// (Unfortunately this doesn't reach CSS background images. We could fix
+	// that by calling getComputedStyle on *everything*, or by sending URLs of
+	// non-<img>s down from the parent, and then doing 'new Image().src = url'.
+	// But it's a bit complex.)
+	var any = false;
+	for (var tagName of ["video", "img"]) {
+		for (var el of document.getElementsByTagName(tagName)) {
+			if (isAnimatedImage(el)) {
+				resetImageAnimation(el);
+				any = true;
+			}
 		}
-	}
-
-	// Iterate the list of URLs to also include CSS background images.
-	for (var pair of AnimatedMap.entries()) {
-		if (pair[1] === 1)
-			resetImageAnimationForUrl(pair[0]);
-	}
-
-	// But iterate actual images to know whether anything was actually reset.
-	for (el of document.getElementsByTagName("img")) {
-		if (AnimatedMap.has(el.src))
-			any = true;
 	}
 	return any;
 }
 
-function toggleGifsInWindow() {
+function toggleImagesInWindow() {
+	var curState = WantedAnimationBehavior;
+
+	// If we've toggled an individual image, and it's still in the viewport,
+	// go by that instead of by the global animation mode.
+	if (LastToggledImage && inViewport(LastToggledImage) &&
+			isAnimatedImage(LastToggledImage)) {
+		curState = getAnimationState(LastToggledImage);
+	}
+
+	WantedAnimationBehavior = (curState === "none" ? "normal" : "none");
+
 	var any = false;
-	for (var el of document.getElementsByTagName("video")) {
-		if (isGifv(el)) {
-			// TODO pause gifv
-			resetImageAnimation(el);
-			any = true;
+	for (var tagName of ["video", "img"]) {
+		for (var el of document.getElementsByTagName(tagName)) {
+			if (isAnimatedImage(el)) {
+				setAnimationState(el, WantedAnimationBehavior);
+				any = true;
+			}
 		}
 	}
-	any = any || !!AnimatedMap.size;
-	// TODO
-	return any;
+
+	if (CurrentHover)
+		CurrentHover.refresh();
+	forEachAnimationIndicator(e => updateIndicator(e, true));
+
+	return any || AnimatedMap.size > 0;
 }
 
 function onKeydown(event) {
@@ -341,16 +372,14 @@ function onKeydown(event) {
 	var shouldCancel = (event.ctrlKey || event.metaKey || event.altKey);
 
 	if (str === Prefs.shortcutToggle)
-		shouldCancel = toggleGifsInWindow() || shouldCancel;
+		shouldCancel = toggleImagesInWindow() || shouldCancel;
 
 	if (str === Prefs.shortcutReset)
-		shouldCancel = resetGifsInWindow() || shouldCancel;
+		shouldCancel = resetImagesInWindow() || shouldCancel;
 
 	if (shouldCancel)
 		cancelEvent(event);
 }
-
-// ==== Overlay ====
 
 function updateKeyListeners() {
 	var shouldAdd = (Prefs.shortcutToggle || Prefs.shortcutReset);
@@ -360,17 +389,121 @@ function updateKeyListeners() {
 		window.removeEventListener("keydown", onKeydown);
 }
 
-function updateIndicator(el, initial) {
+// ==== Overlay ====
+
+function injectOverlayCss() {
+	if (HasInjectedCss)
+		return;
+	HasInjectedCss = true;
+	var css = document.createElement("style");
+	css.textContent = OverlayCss;
+	css.style.display = "none";
+	document.documentElement.appendChild(css);
+}
+
+function injectIndicatorSvg() {
+	if (HasInjectedSvg)
+		return;
+	HasInjectedSvg = true;
+
+	function cr(name, attrs) {
+		var ret = document.createElementNS("http://www.w3.org/2000/svg", name);
+		for (var a in attrs)
+			ret.setAttribute(a, attrs[a]);
+		return ret;
+	}
+
+	var svg = cr("svg", {width: "0", height: "0"});
+	svg.setAttributeNS("http://www.w3.org/2000/xmlns/", "xmlns:xlink", "http://www.w3.org/1999/xlink");
+	svg.style.position = "absolute";
+	var defs = cr("defs", {});
+	var filter = cr("filter", {
+		id: "toggleGifsIndicatorFilter",
+		x: "0",
+		y: "0",
+		width: "100%",
+		height: "100%"
+	});
+	var feImage = cr("feImage", {
+		preserveAspectRatio: "xMaxYMin meet",
+		width: "100%",
+		height: "19",
+		y: "3",
+		result: "img"
+	});
+	feImage.setAttributeNS("http://www.w3.org/1999/xlink", "xlink:href", PlayIcon);
+	var feComposite = cr("feComposite", {operator: "over", in: "img", in2: "SourceGraphic"});
+	filter.appendChild(feImage);
+	filter.appendChild(feComposite);
+	defs.appendChild(filter);
+	svg.appendChild(defs);
+	document.documentElement.appendChild(svg);
+}
+
+function updateIndicator(el, initial = false) {
+	void el;
+	void initial;
 	// TODO
 }
 
 function markAnimated(img) {
-	if (img.toggleGifsHasCheckedAnimation)
+	if (img[eCheckedAnimation])
 		return;
-	img.toggleGifsHasCheckedAnimation = true;
+	img[eCheckedAnimation] = true;
+
+	if (WantedAnimationBehavior !== AnimationBehavior)
+		setAnimationState(WantedAnimationBehavior);
 
 	// TODO
 	img.style.border = "2px solid red";
+}
+
+function clearHoverEffect() {
+	if (!CurrentHover)
+		return;
+	var controller = CurrentHover;
+	CurrentHover = null;
+	controller.clearTimeouts();
+	var el = controller.element;
+	var overlay = controller.overlay;
+	if (overlay && overlay.parentNode)
+		overlay.parentNode.removeChild(overlay);
+	if (controller.mo)
+		controller.mo.disconnect();
+	if (Prefs.hoverPauseWhen === HoverPause.Unhover && controller.playing &&
+			LastToggledImage === el) {
+		LastToggledImage = null;
+		setAnimationState(el, "normal");
+	}
+	updateIndicator(el);
+}
+
+function onMouseOver(event) {
+	void event;
+	// TODO
+}
+
+function onMouseOut() {
+	// Essentially we want to do clearHoverEffect here if we are currently
+	// hovering an animated image. However, the mouseout might be because
+	// we hovered over one of the buttons, which we will know in a few
+	// milliseconds. Hence this complicated logic.
+	// TODO CurrentHoverCancelLoadWaiters(); ?
+	if (!CurrentHover || CurrentHover.mouseoutTimeout !== null)
+		return;
+	try {
+		CurrentHover.mouseoutTimeout = window.setTimeout(() => {
+			CurrentHover.mouseoutTimeout = null;
+			clearHoverEffect();
+		}, 50);
+	} catch (ex) {
+		clearHoverEffect();
+	}
+}
+
+function updateHoverListeners() {
+	addEventListener("mouseover", onMouseOver);
+	addEventListener("mouseout", onMouseOut);
 }
 
 // ==== Animation detection ====
@@ -401,14 +534,15 @@ function handleLoadStart(img) {
 // ==== Initialization ====
 
 function updatePref(pref, value) {
-	// TODO support all prefs here, or just a subset?
-	// indicatorStyle might require special handling
 	console.log("updated setting", pref, value);
 	Prefs[pref] = value;
 	if (pref === "shortcutReset" || pref === "shortcutToggle")
 		updateKeyListeners();
 	if (pref === "hoverPauseWhen")
 		updateClickListeners();
+	if (pref === "showOverlays" && !value)
+		clearHoverEffect();
+	// TODO indicatorStyle
 }
 
 function init() {
@@ -428,6 +562,7 @@ function init() {
 			// Assume 'behavior', as just queried from the global pref, is correct
 			// for our presContext. This should hold with >99% probability.
 			AnimationBehavior = behavior;
+			WantedAnimationBehavior = AnimationBehavior;
 		});
 
 	let loadedPromise = Promise.all([
@@ -472,6 +607,7 @@ function init() {
 
 		updateKeyListeners();
 		updateClickListeners();
+		updateHoverListeners();
 
 		browser.runtime.onMessage.addListener(request => {
 			if (request.type === "notify-animated") {
