@@ -160,10 +160,9 @@ function *gifDecoder($) {
 			atLeastOneImage = true;
 
 			// Metadata
-			if ($.avail < 7) yield $.Ensure(7);
-			$.skip(4); // size
+			if ($.avail < 9) yield $.Ensure(9);
+			$.skip(8); // x, y, width, height
 			bits = $.read1(); // has lct, interlaced, (unused bits), lct size
-			$.skip(2); // background color, aspect ratio
 
 			// LCT
 			if (bits & 0x80) {
@@ -393,7 +392,7 @@ function isGif(req) {
 }
 
 function requestListener(req) {
-	let status = req.statusCode;
+	var status = req.statusCode;
 	if (200 <= status && status < 300 && isGif(req)) {
 		var url = req.url;
 		// XXX Does req.url take redirects into account, or do I need to hook
