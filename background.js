@@ -117,11 +117,12 @@ function *gifDecoder($) {
 				// again per fx impl, read max(len, 4) bytes, and process the first 4
 				len = Math.max(len, 4);
 				if ($.avail < len + 1) yield $.Ensure(len + 1);
-				$.skip(1); // reversed, disposal method, user input, transparency
-				var dur = $.readU16();
-				$.skip(len - 3); // transparency index, dummy padding
-				if (dur)
-					return $.FoundAnimation();
+				// 1 byte: reversed, disposal method, user input, transparency
+				// 2 bytes: frame duration
+				// 1 byte: transparency index
+				// Firefox claims that images are animated if they have a non-zero
+				// duration, but that gives quite a few false positives.
+				$.skip(len);
 				len = $.read1();
 			} else if (type === 0xff && len === 11) {
 				if ($.avail < 12) yield $.Ensure(12);
