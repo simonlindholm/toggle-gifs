@@ -109,6 +109,7 @@ var HoveredNonanimatedImage = null;
 var AnimationIndicators = new Set();
 var HasInjectedCss = false;
 var HasInjectedSvg = false;
+var SeenAnyAnimated = false;
 var Prefs = null;
 
 // 1 = yes, 2 = waiting.
@@ -178,7 +179,7 @@ function sendMessageWithRetry(msg) {
 				});
 			});
 	}
-	return rec(msg, 0, 20);
+	return rec(0, 20);
 }
 
 function hash(url) {
@@ -294,7 +295,7 @@ function isAnimatedImage(el) {
 	if (el.tagName === "VIDEO") {
 		return isGifv(el);
 	} else {
-		return el.tagName === "IMG" && AnimatedMap.has(hash(el.src));
+		return (el.tagName === "IMG" && AnimatedMap.get(hash(el.src)) === 1);
 	}
 }
 
@@ -365,7 +366,7 @@ function toggleImagesInWindow() {
 		CurrentHover.refresh();
 	forEachAnimationIndicator(updateIndicator);
 
-	return any || AnimatedMap.size > 0;
+	return any || SeenAnyAnimated;
 }
 
 function onKeydown(event) {
@@ -822,6 +823,8 @@ function onLoadedMetadata(event) {
 
 function notifyAnimated(url) {
 	console.log("found animated gif", url);
+	AnimatedMap.set(hash(url), 1);
+	SeenAnyAnimated = true;
 	for (var img of document.getElementsByTagName("img")) {
 		if (img.src === url)
 			markAnimated(img);
