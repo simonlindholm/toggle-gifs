@@ -97,11 +97,15 @@ const OverlayCss = `
 // Set upon init, when the parent tells us the right value.
 var AnimationBehavior = null;
 
+var IsTumblr = (location.host.indexOf("tumblr") !== -1);
+var IsPinterest = (location.host.indexOf("pinterest") !== -1);
+
 // ==== Global state ====
 
 var WantedAnimationBehavior = null;
 var CurrentHover = null;
 var LastToggledImage = null;
+var HoveredNonanimatedImage = null;
 var AnimationIndicators = new Set();
 var HasInjectedCss = false;
 var HasInjectedSvg = false;
@@ -118,13 +122,13 @@ var AnimatedMap = new Map();
 
 // ==== Expando symbols ====
 
-var eAnimationMode = "toggleGifs-animationMode";
-var eCurrentState = "toggleGifs-currentState";
+var eAwaitingPlay = "toggleGifs-awaitingPlay";
+var eAnimationState = "toggleGifs-animationState";
 var eCheckedAnimation = "toggleGifs-checkedAnimation";
 var eHasHovered = "toggleGifs-hasHovered";
 var eTooSmall = "toggleGifs-tooSmall";
 var eShownIndicator = "toggleGifs-shownIndicator";
-var eInitedGif = "toggleGifs-initedGif";
+var eInitedGifv = "toggleGifs-initedGifv";
 var eRelatedTo = "toggleGifs-relatedTo";
 var eFakeImage = "toggleGifs-fakeImage";
 var eHandledPinterest = "toggleGifs-handledPinterest";
@@ -194,7 +198,6 @@ function noop() {
 	// Do nothing.
 }
 
-// TODO changed signature, double-check callers
 function forEachAnimationIndicator(func) {
 	for (var el of AnimationIndicators) {
 		try {
@@ -267,7 +270,7 @@ function getAnimationState(el) {
 	if (el.tagName === "VIDEO") {
 		return el.paused ? "none" : "normal";
 	} else {
-		return el[eCurrentState] || AnimationBehavior;
+		return el[eAnimationState] || AnimationBehavior;
 	}
 }
 
@@ -278,11 +281,12 @@ function setAnimationState(el, state) {
 		else
 			el.pause();
 	} else {
-		var currentState = el[eCurrentState] || AnimationBehavior;
+		var currentState = el[eAnimationState] || AnimationBehavior;
 		if (currentState === state)
 			return;
-		el[eCurrentState] = state;
+		el[eAnimationState] = state;
 		// TODO
+		alert("setAnimationState " + state + " " + el.src);
 	}
 }
 
@@ -290,7 +294,7 @@ function isAnimatedImage(el) {
 	if (el.tagName === "VIDEO") {
 		return isGifv(el);
 	} else {
-		return el.tagName === "IMG" && AnimatedMap.has(el.src);
+		return el.tagName === "IMG" && AnimatedMap.has(hash(el.src));
 	}
 }
 
@@ -444,6 +448,10 @@ function injectIndicatorSvg() {
 	document.documentElement.appendChild(svg);
 }
 
+function updateIndicatorForTarget(event) {
+	updateIndicator(event.target);
+}
+
 function updateIndicator(el) {
 	if (Prefs.indicatorStyle === 0 || imageTooSmall(el))
 		return;
@@ -477,9 +485,7 @@ function updateIndicator(el) {
 	if (el.tagName === "VIDEO" && !AnimationIndicators.has(el)) {
 		// A playing video with an SVG filter kills performance, so as a safety measure,
 		// remove the indicator again if the video is played by script.
-		el.addEventListener("play", event => {
-			updateIndicator(event.target);
-		});
+		el.addEventListener("play", updateIndicatorForTarget);
 	}
 	AnimationIndicators.add(el);
 }
@@ -487,12 +493,20 @@ function updateIndicator(el) {
 function updateAllIndicators(prev, cur) {
 	if (prev > 0 && cur === 0) {
 		forEachAnimationIndicator(el => {
-			el.style.filter = "";
-			el.opacity = "";
+			if (prev === 1)
+				el.style.filter = "";
+			else
+				el.style.opacity = "";
 		});
-		AnimationIndicators = [];
+		AnimationIndicators = new Set();
 	} else if (prev === 0 && cur > 0) {
-		// TODO
+		for (var tagName of ["video", "img"]) {
+			for (var el of document.getElementsByTagName(tagName)) {
+				if (isAnimatedImage(el)) {
+					updateIndicator(el);
+				}
+			}
+		}
 	}
 }
 
@@ -521,7 +535,6 @@ function applyHoverEffect(el) {
 		setPauseButtonAppearance: noop
 	};
 
-	initGifState(el);
 	CurrentHover.refresh();
 
 	if (Prefs.playOnHover && !CurrentHover.playing) {
@@ -619,18 +632,6 @@ function applyHoverEffect(el) {
 	CurrentHover.mo = mo;
 }
 
-function markAnimated(img) {
-	if (img[eCheckedAnimation])
-		return;
-	img[eCheckedAnimation] = true;
-
-	if (WantedAnimationBehavior !== AnimationBehavior)
-		setAnimationState(WantedAnimationBehavior);
-
-	// TODO
-	img.style.border = "2px solid red";
-}
-
 function clearHoverEffect() {
 	if (!CurrentHover)
 		return;
@@ -651,19 +652,113 @@ function clearHoverEffect() {
 	updateIndicator(el);
 }
 
+function handleImgHover(el) {
+	if (isAnimatedImage(el))
+		applyHoverEffect(el);
+	else
+		HoveredNonanimatedImage = el;
+}
+
+function setTumblrRelatedImage(el) {
+	if (el[eRelatedTo])
+		return true;
+	var par = el;
+	while (par && !(par.classList && par.classList.contains("post")))
+		par = par.parentNode;
+	par = par && par.getElementsByClassName("post_content")[0];
+	var imDiv = par && (par.querySelector("div.photo_stage_img") || par.querySelector("div.post_thumbnail_container"));
+	if (imDiv) {
+		if (!imDiv[eFakeImage]) {
+			var cs = window.getComputedStyle(imDiv);
+			var bg = cs && cs.backgroundImage;
+			if (!bg) return false;
+			var r = /^url\("(.*)"\)$/.exec(bg);
+			var src = r && r[1];
+			if (!src) return false;
+
+			// Now ideally we would replace tumblr's background-image-based thingy with
+			// a real img tag. However, mimicking the exact positioning and clipping of the
+			// image is difficult and fragile, so we abuse bug 332973 instead.
+			var dummyImg = document.createElement("img");
+			dummyImg.src = src;
+			// imDiv.parentNode.replaceChild(dummyImg, imDiv);
+			dummyImg.style.display = "none";
+			dummyImg[ePositionAsIf] = imDiv;
+			imDiv.appendChild(dummyImg);
+			imDiv[eFakeImage] = dummyImg;
+		}
+
+		el[eRelatedTo] = imDiv[eFakeImage];
+		return true;
+	}
+	var img = par && par.getElementsByTagName("img")[0];
+	if (img) {
+		el[eRelatedTo] = img;
+		return true;
+	}
+	return false;
+}
+
+function handlePinterestHover(el) {
+	// Pinterest has their own GIF play buttons. Let them do their thing, and
+	// auto-animate the image that appears after clicking "play".
+	if (el[eHandledPinterest] || !el.parentNode.querySelector(".playIndicatorPill.gifType"))
+		return;
+	el[eHandledPinterest] = true;
+	var img = el.parentNode.getElementsByTagName("img")[0];
+	img.addEventListener("load", () => {
+		if (isAnimatedImage(img)) {
+			setAnimationState(img, "normal");
+			updateIndicator(img);
+		} else {
+			img[eAwaitingPlay] = true;
+		}
+	});
+}
+
+function partOfHoverTarget(el) {
+	return CurrentHover && (el === CurrentHover.element ||
+		el[eRelatedTo] === CurrentHover.element ||
+		(el.id && el.id.startsWith("toggleGifs")));
+}
+
 function onMouseOver(event) {
-	void event;
-	// TODO
+	var el = event.target, cl = el.className;
+
+	var hasRelatedImage = false;
+	if (IsTumblr && ["post_controls_top", "post_tags_inner", "click_glass",
+			"hover", "hover_inner", "post_date", "post_notes"].includes(cl)) {
+		hasRelatedImage = setTumblrRelatedImage(el);
+	}
+
+	if (IsPinterest && (cl === "hoverMask" || cl === "playIndicatorPill")) {
+		handlePinterestHover(el);
+		return;
+	}
+
+	if (CurrentHover) {
+		if (partOfHoverTarget(el)) {
+			CurrentHover.clearTimeouts();
+			return;
+		}
+		clearHoverEffect();
+	}
+
+	if (hasRelatedImage)
+		handleImgHover(el[eRelatedTo]);
+	else if ((el.tagName === "IMG" || isGifv(el)) && el instanceof window.HTMLElement)
+		handleImgHover(el);
 }
 
 function onMouseOut() {
-	// Essentially we want to do clearHoverEffect here if we are currently
-	// hovering an animated image. However, the mouseout might be because
-	// we hovered over one of the buttons, which we will know in a few
-	// milliseconds. Hence this complicated logic.
-	// TODO CurrentHoverCancelLoadWaiters(); ?
+	HoveredNonanimatedImage = null;
 	if (!CurrentHover || CurrentHover.mouseoutTimeout !== null)
 		return;
+
+	// Essentially we want to do clearHoverEffect here, since we unhovered an
+	// animated image. However, the mouseout might be because we hovered over
+	// one of the buttons, which we will know in a few milliseconds. Hence this
+	// complicated logic.
 	try {
 		CurrentHover.mouseoutTimeout = window.setTimeout(() => {
 			CurrentHover.mouseoutTimeout = null;
@@ -679,18 +774,26 @@ function updateHoverListeners() {
 	addEventListener("mouseout", onMouseOut);
 }
 
-function initGifState(el) {
-	void el;
-	// TODO
+function markAnimated(img) {
+	if (img[eCheckedAnimation])
+		return;
+	img[eCheckedAnimation] = true;
+
+	if (img[eAwaitingPlay])
+		setAnimationState(img, "normal");
+	else if (WantedAnimationBehavior !== AnimationBehavior)
+		setAnimationState(img, WantedAnimationBehavior);
+
+	updateIndicator(img);
+
+	if (HoveredNonanimatedImage === img)
+		applyHoverEffect(img);
 }
 
 function onLoad(event) {
-	console.log("onload", event); // TODO temporary
 	var el = event.target;
 	if (el.tagName !== "IMG")
 		return;
-
-	initGifState(el);
 
 	if (Prefs.playOnHover && Prefs.hoverPlayOnLoad &&
 		(Prefs.hoverPauseWhen === HoverPause.Never || LastToggledImage === el) &&
@@ -704,8 +807,15 @@ function onLoad(event) {
 }
 
 function onLoadedMetadata(event) {
-	if (isGifv(event.target))
-		initGifState(event.target);
+	var el = event.target;
+	if (isGifv(el)) {
+		if (el[eInitedGifv])
+			return;
+		el[eInitedGifv] = true;
+		if (Prefs.defaultPaused)
+			setAnimationState(el, "none");
+		updateIndicator(el);
+	}
 }
 
 // ==== Animation detection ====
