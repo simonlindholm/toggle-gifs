@@ -385,6 +385,12 @@ function setFilterHandlers(filter, url, decoder, foundAnimation) {
 }
 
 function isGif(req) {
+	if (req.url.includes(".gif")) {
+		// Some GIFs have an invalid content-type; heuristically detect them
+		// based on URL instead. (We could try to parse every image as a GIF,
+		// but that adds more overhead.)
+		return true;
+	}
 	for (let header of req.responseHeaders) {
 		if (header.name.toLowerCase() === "content-type")
 			return (header.value === "image/gif");
