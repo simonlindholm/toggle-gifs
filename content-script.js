@@ -1,5 +1,4 @@
-/* eslint-env browser */
-/* global browser */
+/* global browser, window, document, location, console */
 "use strict";
 
 // Put everything in a closure, to pre-emptively work around
@@ -191,7 +190,7 @@ function hash(url) {
 }
 
 function cancelEvent(event) {
-	event.stopPropagation();
+	event.stopImmediatePropagation();
 	event.preventDefault();
 }
 
@@ -222,7 +221,7 @@ function inViewport(el) {
 }
 
 function isLeftClick(event) {
-	return event.which === 1;
+	return event.isTrusted && event.which === 1;
 }
 
 function isGifv(el) {
@@ -370,7 +369,7 @@ function toggleImagesInWindow() {
 }
 
 function onKeydown(event) {
-	if (event.defaultPrevented)
+	if (!event.isTrusted || event.defaultPrevented)
 		return;
 	var str = keyDownEventToString(event);
 	if (!str || !(str === Prefs.shortcutToggle || str === Prefs.shortcutReset))
@@ -450,7 +449,8 @@ function injectIndicatorSvg() {
 }
 
 function updateIndicatorForTarget(event) {
-	updateIndicator(event.target);
+	if (event.isTrusted)
+		updateIndicator(event.target);
 }
 
 function updateIndicator(el) {
@@ -707,7 +707,8 @@ function handlePinterestHover(el) {
 		return;
 	el[eHandledPinterest] = true;
 	var img = el.parentNode.getElementsByTagName("img")[0];
-	img.addEventListener("load", () => {
+	img.addEventListener("load", event => {
+		if (!event.isTrusted) return;
 		if (isAnimatedImage(img)) {
 			setAnimationState(img, "normal");
 			updateIndicator(img);
@@ -724,6 +725,7 @@ function partOfHoverTarget(el) {
 }
 
 function onMouseOver(event) {
+	if (!event.isTrusted) return;
 	var el = event.target, cl = el.className;
 
 	var hasRelatedImage = false;
@@ -751,7 +753,8 @@ function onMouseOver(event) {
 		handleImgHover(el);
 }
 
-function onMouseOut() {
+function onMouseOut(event) {
+	if (!event.isTrusted) return;
 	HoveredNonanimatedImage = null;
 	if (!CurrentHover || CurrentHover.mouseoutTimeout !== null)
 		return;
@@ -771,8 +774,8 @@ function onMouseOut() {
 }
 
 function updateHoverListeners() {
-	addEventListener("mouseover", onMouseOver);
-	addEventListener("mouseout", onMouseOut);
+	window.addEventListener("mouseover", onMouseOver);
+	window.addEventListener("mouseout", onMouseOut);
 }
 
 function markAnimated(img) {
@@ -791,11 +794,7 @@ function markAnimated(img) {
 		applyHoverEffect(img);
 }
 
-function onLoad(event) {
-	var el = event.target;
-	if (el.tagName !== "IMG")
-		return;
-
+function handleLoad(el) {
 	if (Prefs.playOnHover && Prefs.hoverPlayOnLoad &&
 		(Prefs.hoverPauseWhen === HoverPause.Never || LastToggledImage === el) &&
 		el[eHasHovered] && isAnimatedImage(el) && getAnimationState(el) === "none")
@@ -807,8 +806,7 @@ function onLoad(event) {
 	}
 }
 
-function onLoadedMetadata(event) {
-	var el = event.target;
+function handleLoadedMetadata(el) {
 	if (isGifv(el)) {
 		if (el[eInitedGifv])
 			return;
@@ -888,7 +886,13 @@ function init() {
 	]);
 
 	var inited = false;
-	var loadStartQueue = [];
+	var loadQueue = [];
+	function callWhenLoaded(callback) {
+		if (inited)
+			callback();
+		else
+			loadQueue.push(callback);
+	}
 
 	settingsPromise.then(() => {
 		browser.storage.onChanged.addListener((changes, area) => {
@@ -908,12 +912,20 @@ function init() {
 	});
 
 	function onLoadStart(event) {
-		var img = event.target;
-		if (img.tagName !== "IMG") return;
-		if (inited)
-			handleLoadStart(img);
-		else
-			loadStartQueue.push(img);
+		var el = event.target;
+		if (event.isTrusted && el.tagName === "IMG")
+			callWhenLoaded(() => handleLoadStart(el));
+	}
+
+	function onLoad(event) {
+		var el = event.target;
+		if (event.isTrusted && el.tagName === "IMG")
+			callWhenLoaded(() => handleLoad(el));
+	}
+
+	function onLoadedMetadata(event) {
+		if (event.isTrusted)
+			callWhenLoaded(() => handleLoadedMetadata(event.target));
 	}
 
 	document.addEventListener("loadstart", onLoadStart, true);
@@ -936,14 +948,14 @@ function init() {
 			}
 		});
 
-		for (let img of loadStartQueue) {
+		for (let callback of loadQueue) {
 			try {
-				handleLoadStart(img);
+				callback();
 			} catch (e) {
 				console.error(e);
 			}
 		}
-		loadStartQueue = null;
+		loadQueue = null;
 	});
 }
 
