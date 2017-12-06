@@ -315,6 +315,17 @@ function getImageClone(el) {
 			return cl;
 		}
 	}
+	if (el.hasAttribute("srcset")) {
+		// It is impossible to clone images with srcset and have them share
+		// animation mode... So let's convert the image to not use srcset, so
+		// we get slightly more control over it. This resets animation, but
+		// what can you do. This occurs on wikipedia, mainly.
+		if (el.currentSrc)
+			el.src = el.currentSrc;
+		el.removeAttribute("srcset");
+		el.removeAttribute("sizes");
+	}
+
 	cl = el.cloneNode(false);
 	for (var attr of cl.getAttributeNames()) {
 		if (attr !== "src")
