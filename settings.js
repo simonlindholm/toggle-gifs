@@ -126,7 +126,8 @@ Promise.all([
 	pauseEl.checked = (behavior === "none");
 	pauseEl.onchange = function() {
 		let value = this.checked ? "none" : "normal";
-		browser.browserSettings.imageAnimationBehavior.set({value}).catch(e => console.error(e));
+		browser.browserSettings.imageAnimationBehavior.set({value})
+			.catch(e => console.error(e));
 		browser.runtime.sendMessage({
 			type: "updated-pref",
 			pref: "animation-behavior",

@@ -171,11 +171,8 @@ function sendMessageWithRetry(msg) {
 					throw new Error("Failed to talk to background script even after retries: " + String(e));
 				if (attempt === 0)
 					console.warn("Unable to talk to background script; bug 1369841? Retrying.");
-				return new Promise(r => {
-					setTimeout(() => {
-						r(rec(attempt + 1, dur * 2));
-					}, dur);
-				});
+				return delay(dur)
+					.then(() => rec(attempt + 1, dur * 2));
 			});
 	}
 	return rec(0, 20);
@@ -196,6 +193,12 @@ function cancelEvent(event) {
 
 function noop() {
 	// Do nothing.
+}
+
+function delay(ms) {
+	return new Promise(resolve => {
+		window.setTimeout(resolve, ms);
+	});
 }
 
 function forEachAnimationIndicator(func) {
