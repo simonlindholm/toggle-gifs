@@ -105,6 +105,8 @@ var WantedAnimationBehavior = null;
 var CurrentHover = null;
 var LastToggledImage = null;
 var HoveredNonanimatedImage = null;
+var NonDefaultFrame = null;
+var NonDefaultFramePromise = null;
 var AnimationIndicators = new Set();
 var HasInjectedCss = false;
 var HasInjectedSvg = false;
@@ -133,6 +135,7 @@ var eRelatedTo = "toggleGifs-relatedTo";
 var eFakeImage = "toggleGifs-fakeImage";
 var eHandledPinterest = "toggleGifs-handledPinterest";
 var ePositionAsIf = "toggleGifs-positionAsIf";
+var eImageClone = "toggleGifs-imageClone";
 
 // ==== Helpers ====
 
@@ -223,6 +226,12 @@ function inViewport(el) {
 	return (re && re.bottom > 0 && re.top < window.innerHeight);
 }
 
+function semiHide(el) {
+	// Hide an element from the eye and prevent it from affecting layout, but
+	// keep it visible for Firefox's GIF-rendering code.
+	// TODO
+}
+
 function isLeftClick(event) {
 	return event.isTrusted && event.which === 1;
 }
@@ -263,9 +272,29 @@ function resetImageAnimation(img) {
 	if (img.tagName === "VIDEO") {
 		img.currentTime = 0;
 	} else {
-		// Funnily enough, the standard guarantees this to work, without side effects:
+		// The basic idea here is to do "img.src = img.src", which works
+		// without side effects because of:
 		// https://html.spec.whatwg.org/multipage/images.html#reacting-to-dom-mutations
-		img.src = img.src;
+		// However, things get more complex in weird states.
+		if (getAnimationState(img) === "normal") {
+			new window.Image().src = img.src;
+		} else {
+			if (AnimationBehavior === "none") {
+				// We cannot reset paused images if we are ourselves paused.
+				if (img[eAnimationState] && NonDefaultFrame) {
+					setAnimationState(img, "normal");
+					// XXX then async?
+					img.src = img.src;
+				}
+			} else {
+				// The first "img.src = img.src" will cause the image to start
+				// playing, the second to reset. Then we stop it again.
+				img.src = img.src;
+				img.src = img.src;
+				img[eAnimationState] = "normal";
+				setAnimationState(img, "none");
+			}
+		}
 	}
 }
 
@@ -277,6 +306,76 @@ function getAnimationState(el) {
 	}
 }
 
+function getImageClone(el) {
+	var cl = el[eImageClone];
+	if (cl) {
+		if (cl.src !== el.src) {
+			cl.remove();
+		} else {
+			return cl;
+		}
+	}
+	cl = el.cloneNode(false);
+	for (var attr of cl.getAttributeNames()) {
+		if (attr !== "src")
+			cl.removeAttribute(attr);
+	}
+	semiHide(cl);
+	el[eImageClone] = cl;
+	return cl;
+}
+
+function withNonDefaultFrame(callback) {
+	if (NonDefaultFrame) {
+		if (document.contains(NonDefaultFrame)) {
+			callback(NonDefaultFrame.contentWindow);
+			return;
+		}
+		NonDefaultFrame = null;
+		NonDefaultFramePromise = null;
+	}
+	if (!NonDefaultFramePromise) {
+		NonDefaultFramePromise = new Promise((resolve, fail) => {
+			var key = Date.now() + "." + Math.random();
+			browser.runtime.sendMessage({
+				type: "temporary-behavior",
+				value: (AnimationBehavior === "none" ? "normal" : "none"),
+				key
+			})
+			.then(() => {
+				var ifr = document.createElement("iframe");
+				ifr.setAttribute("toggle-gifs-frame", "");
+				ifr.srcdoc = "<!DOCTYPE html><body></body>";
+				ifr.addEventListener("load", event => {
+					if (!event.isTrusted) return;
+					NonDefaultFrame = ifr;
+					resolve(ifr.contentWindow);
+					browser.runtime.sendMessage({
+						type: "done-temporary-behavior",
+						key
+					});
+					event.stopImmediatePropagation();
+				}, true);
+				ifr.addEventListener("error", event => {
+					if (!event.isTrusted) return;
+					browser.runtime.sendMessage({
+						type: "done-temporary-behavior",
+						key
+					});
+					fail(new Error("failed to load frame"));
+					event.stopImmediatePropagation();
+				}, true);
+				semiHide(ifr);
+				document.body.appendChild(ifr);
+			}).catch(fail);
+		}).catch(err => {
+			console.error(err);
+			throw err;
+		});
+	}
+	NonDefaultFramePromise.then(callback);
+}
+
 function setAnimationState(el, state) {
 	if (el.tagName === "VIDEO") {
 		if (state === "normal")
@@ -284,12 +383,19 @@ function setAnimationState(el, state) {
 		else
 			el.pause();
 	} else {
-		var currentState = el[eAnimationState] || AnimationBehavior;
+		let currentState = el[eAnimationState] || AnimationBehavior;
 		if (currentState === state)
 			return;
 		el[eAnimationState] = state;
-		// TODO
-		alert("setAnimationState " + state + " " + el.src);
+		if (state === AnimationBehavior) {
+			let cl = getImageClone(el);
+			document.body.appendChild(cl);
+		} else {
+			withNonDefaultFrame(fr => {
+				let cl = getImageClone(el);
+				fr.document.body.appendChild(cl);
+			});
+		}
 	}
 }
 
@@ -823,7 +929,7 @@ function handleLoadedMetadata(el) {
 // ==== Animation detection ====
 
 function notifyAnimated(url) {
-	console.log("found animated gif", url);
+	console.log("content-script: found animated image", url);
 	AnimatedMap.set(hash(url), 1);
 	SeenAnyAnimated = true;
 	for (var img of document.getElementsByTagName("img")) {

@@ -1,4 +1,4 @@
-/* global console, browser */
+/* global console, browser, setTimeout, clearTimeout */
 /* eslint new-cap: off */
 "use strict";
 
@@ -7,11 +7,17 @@
 var LRU_CACHE_SIZE = 200;
 var LRU_WAITING_SIZE = 200;
 var MAX_URL_SIZE = 500;
+var QUEUE_MAX_TIME = 2000;
 
-var AnimationBehavior = null;
+var DefaultAnimationBehavior = null;
+var CurrentAnimationBehavior = null;
 
 function isDataUrl(url) {
 	return url.startsWith("data:");
+}
+
+function invertBehavior(value) {
+	return value === "none" ? "normal" : "none";
 }
 
 function notifyAnimated(who, url) {
@@ -73,6 +79,71 @@ var AnimatedUrlCache = {
 				if (this.waiting.length > LRU_WAITING_SIZE)
 					this.evict(this.waiting, (LRU_WAITING_SIZE * 3) >> 2);
 			}
+		}
+	},
+};
+
+var TemporaryQueue = {
+	state: "default", // default | changed | transition
+	// TODO: save temporary setting
+
+	queues: {
+		default: [],
+		changed: []
+	},
+
+	blockers: new Map(),
+
+	push(wanted, key, callback) {
+		let tp = (wanted === DefaultAnimationBehavior ? "default" : "changed");
+		this.queues[tp].push({key, callback});
+		this.work();
+	},
+
+	work() {
+		if (this.state === "transition")
+			return;
+		for (let item of this.queues[this.state]) {
+			let key = item.key;
+			var timeout = setTimeout(() => {
+				// Revert the change after a timeout, e.g. if the tab gets
+				// closed at just the wrong moment.
+				console.warn("Reverting animation mode change after timeout");
+				this.blockers.delete(key);
+				this.work();
+			}, QUEUE_MAX_TIME);
+			this.blockers.set(key, {timeout});
+			try {
+				item.callback();
+			} catch (ex) {
+				// Not our or the caller's fault if this throws an exception!
+				console.error(ex);
+			}
+		}
+		this.queues[this.state] = [];
+
+		if (this.blockers.size === 0 && (this.state === "changed" ||
+					this.queues.changed.length > 0)) {
+			let newState = (this.state === "changed" ? "default" : "changed");
+			this.state = "transition";
+			let behavior = (newState === "default"
+					? DefaultAnimationBehavior
+					: invertBehavior(DefaultAnimationBehavior));
+			browser.browserSettings.imageAnimationBehavior.set({value: behavior})
+				.then(() => {
+					this.state = newState;
+					this.work();
+				})
+				.catch(e => console.error(e));
+		}
+	},
+
+	done(key) {
+		let entry = this.blockers.get(key);
+		if (entry) {
+			this.blockers.delete(key);
+			clearTimeout(entry.timeout);
+			this.work();
 		}
 	},
 };
@@ -423,8 +494,10 @@ browser.webRequest.onHeadersReceived.addListener(
 let animationBehaviorPromise =
 	browser.browserSettings.imageAnimationBehavior.get({})
 		.then(({value}) => {
-			if (AnimationBehavior === null)
-				AnimationBehavior = value;
+			if (DefaultAnimationBehavior === null) {
+				DefaultAnimationBehavior = value;
+				CurrentAnimationBehavior = value;
+			}
 		})
 		.catch(e => {
 			throw new Error("unable to read image animation behavior: " + String(e));
@@ -435,17 +508,28 @@ browser.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 		let who = {tabId: sender.tab.id, frameId: sender.frameId};
 		AnimatedUrlCache.checkAnimated(who, msg.url);
 	} else if (msg.type === "query-animation-behavior") {
-		if (AnimationBehavior === null) {
+		if (CurrentAnimationBehavior === null) {
 			animationBehaviorPromise.then(() => {
-				sendResponse(AnimationBehavior);
+				sendResponse(CurrentAnimationBehavior);
 			});
 			return true;
 		}
-		sendResponse(AnimationBehavior);
+		sendResponse(CurrentAnimationBehavior);
+	} else if (msg.type === "temporary-behavior") {
+		if (DefaultAnimationBehavior === null)
+			throw new Error("content-script must init before changing behavior");
+		var key = msg.key, wanted = msg.value;
+		TemporaryQueue.push(wanted, key, () => {
+			sendResponse();
+		});
+		return true;
+	} else if (msg.type === "done-temporary-behavior") {
+		TemporaryQueue.done(msg.key);
 	} else if (msg.type === "updated-pref") {
 		console.log("updated pref", msg.pref, msg.value);
 		if (msg.pref === "animation-behavior") {
-			AnimationBehavior = msg.value;
+			DefaultAnimationBehavior = msg.value;
+			CurrentAnimationBehavior = msg.value;
 		}
 	} else {
 		throw new Error("unknown message type");
