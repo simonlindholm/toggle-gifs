@@ -129,6 +129,7 @@ var eAnimationState = "toggleGifs-animationState";
 var eCheckedAnimation = "toggleGifs-checkedAnimation";
 var eHasHovered = "toggleGifs-hasHovered";
 var eTooSmall = "toggleGifs-tooSmall";
+var eOnLoad = "toggleGifs-onLoad";
 var eShownIndicator = "toggleGifs-shownIndicator";
 var eInitedGifv = "toggleGifs-initedGifv";
 var eRelatedTo = "toggleGifs-relatedTo";
@@ -232,6 +233,15 @@ function semiHide(el) {
 	// TODO
 }
 
+function waitForPaint(callback, num = 1) {
+	window.requestAnimationFrame(() => {
+		if (num === 1)
+			callback();
+		else
+			waitForPaint(callback, num - 1);
+	});
+}
+
 function isLeftClick(event) {
 	return event.isTrusted && event.which === 1;
 }
@@ -306,24 +316,33 @@ function getAnimationState(el) {
 	}
 }
 
-function getImageClone(el) {
+function withImageClone(el, callback) {
 	var cl = el[eImageClone];
 	if (cl) {
 		if (cl.src !== el.src) {
 			cl.remove();
 		} else {
-			return cl;
+			callback(cl);
+			return;
 		}
 	}
 	if (el.hasAttribute("srcset")) {
 		// It is impossible to clone images with srcset and have them share
 		// animation mode... So let's convert the image to not use srcset, so
-		// we get slightly more control over it. This resets animation, but
-		// what can you do. This occurs on wikipedia, mainly.
-		if (el.currentSrc)
-			el.src = el.currentSrc;
+		// we get slightly more control over it. Occurs on wikipedia, mainly.
+		let src = el.currentSrc;
 		el.removeAttribute("srcset");
 		el.removeAttribute("sizes");
+		el[eOnLoad] = () => {
+			// For reasons I don't fully understand, we sometimes need to
+			// wait a bit after load for pausing to work.
+			waitForPaint(() => {
+				withImageClone(el, callback);
+			});
+		};
+		if (src)
+			el.src = src;
+		return;
 	}
 
 	cl = el.cloneNode(false);
@@ -333,7 +352,7 @@ function getImageClone(el) {
 	}
 	semiHide(cl);
 	el[eImageClone] = cl;
-	return cl;
+	callback(cl);
 }
 
 function withNonDefaultFrame(callback) {
@@ -399,12 +418,14 @@ function setAnimationState(el, state) {
 			return;
 		el[eAnimationState] = state;
 		if (state === AnimationBehavior) {
-			let cl = getImageClone(el);
-			document.body.appendChild(cl);
+			withImageClone(el, cl => {
+				document.body.appendChild(cl);
+			});
 		} else {
 			withNonDefaultFrame(fr => {
-				let cl = getImageClone(el);
-				fr.document.body.appendChild(cl);
+				withImageClone(el, cl => {
+					fr.document.body.appendChild(cl);
+				});
 			});
 		}
 	}
@@ -915,6 +936,13 @@ function markAnimated(img) {
 }
 
 function handleLoad(el) {
+	let callback = el[eOnLoad];
+	if (callback) {
+		el[eOnLoad] = null;
+		callback();
+		return;
+	}
+
 	if (Prefs.playOnHover && Prefs.hoverPlayOnLoad &&
 		(Prefs.hoverPauseWhen === HoverPause.Never || LastToggledImage === el) &&
 		el[eHasHovered] && isAnimatedImage(el) && getAnimationState(el) === "none")
