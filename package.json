@@ -7,11 +7,13 @@
   "author": "Simon Lindholm",
   "license": "CC0-1.0",
   "scripts": {
-      "extension": "web-ext -s ./extension",
-      "lint": "yarn extension lint",
-      "start": "yarn extension run"
+    "prettier": "prettier --write **/*.js",
+    "extension": "web-ext -s ./extension",
+    "lint": "yarn extension lint",
+    "start": "yarn extension run"
   },
   "dependencies": {
+    "prettier": "^1.11.1",
     "web-ext": "^2.4.0"
   }
 }

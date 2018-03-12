@@ -8,6 +8,7 @@ Development
 Requirement on OS level: `yarn` - https://yarnpkg.com/
 
 ### Commands
-+ `install` - install all packages
-+ `lint`    - run `web-ext lint` in ./extension
-+ `start`   - run development environment
++ `install`     - install all packages
++ `prettier`    - run prettier on all *.js files
++ `lint`        - run `web-ext lint` in ./extension
++ `start`       - run development environment
