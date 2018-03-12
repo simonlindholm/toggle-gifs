@@ -1,0 +1,15 @@
+{
+  "name": "toggle-gifs",
+  "version": "2.0.0",
+  "description": "Start/stop GIF animations through a keyboard shortcut or by clicking them. You can also restart animations from the beginning, or disable animations by default.",
+  "main": "index.js",
+  "repository": "git@github.com:simonlindholm/toggle-gifs.git",
+  "author": "Simon Lindholm",
+  "license": "CC0-1.0",
+  "scripts": {
+      "lint": "web-ext lint"
+  },
+  "dependencies": {
+    "web-ext": "^2.4.0"
+  }
+}
