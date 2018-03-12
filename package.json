@@ -7,7 +7,9 @@
   "author": "Simon Lindholm",
   "license": "CC0-1.0",
   "scripts": {
-      "lint": "web-ext lint"
+      "extension": "web-ext -s ./extension",
+      "lint": "yarn extension lint",
+      "start": "yarn extension run"
   },
   "dependencies": {
     "web-ext": "^2.4.0"
