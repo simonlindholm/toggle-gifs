@@ -1,6 +1,5 @@
 /* eslint-env browser */
 /* global browser */
-"use strict";
 
 // Keep in sync with content-script.js!
 const DefaultPrefs = {
@@ -16,7 +15,7 @@ const DefaultPrefs = {
 
 function keyDownEventToString(event) {
   function keyToString(ev) {
-    let { which, key } = ev;
+    const { which, key } = ev;
     if (which === 27) return "Esc";
     if (which === 32) return "Space";
     if (which === 13) return "Enter";
@@ -24,34 +23,34 @@ function keyDownEventToString(event) {
     return key.length === 1 ? key.toUpperCase() : key;
   }
   function accelToString(ev) {
-    var accel = "";
+    let accel = "";
     if (ev.ctrlKey) accel += "Ctrl+";
     if (ev.metaKey) accel += "Meta+";
     if (ev.shiftKey) accel += "Shift+";
     if (ev.altKey) accel += "Alt+";
     return accel;
   }
-  var key = keyToString(event),
-    accel = accelToString(event);
+  const key = keyToString(event);
+  const accel = accelToString(event);
   return key ? accel + key : "";
 }
 // end keep in sync
 
 let Prefs = null;
 
-let loadPromise = new Promise(resolve => {
+const loadPromise = new Promise(resolve => {
   window.addEventListener("load", resolve, false);
 });
 
-let animationBehaviorPromise = browser.browserSettings.imageAnimationBehavior
+const animationBehaviorPromise = browser.browserSettings.imageAnimationBehavior
   .get({})
   .then(({ value }) => value)
   .catch(e => {
-    throw new Error("unable to read image animation behavior: " + String(e));
+    throw new Error(`unable to read image animation behavior: ${String(e)}`);
   });
 
 function setPref(pref, value) {
-  if (!(pref in Prefs)) throw new Error("changed unknown pref " + pref);
+  if (!(pref in Prefs)) throw new Error(`changed unknown pref ${pref}`);
   Prefs[pref] = value;
   browser.storage.local
     .set({ [pref]: value })
@@ -66,51 +65,51 @@ function setPref(pref, value) {
 }
 
 function handleShortcutKeyDown(event) {
-  let el = event.target;
+  const el = event.target;
   if (event.which === 8) {
     // Clear on backspace.
     el.value = "";
   } else {
-    let str = keyDownEventToString(event);
+    const str = keyDownEventToString(event);
     if (!str) return;
     el.value = str;
   }
 
-  let pref = el.getAttribute("data-pref"),
-    value = el.value;
+  const pref = el.getAttribute("data-pref");
+  const { value } = el;
   setPref(pref, value);
   event.preventDefault();
   event.stopPropagation();
 }
 
 function handleBoolIntChange(event) {
-  let el = event.target;
-  let pref = el.getAttribute("data-pref"),
-    value = el.checked ? 1 : 0;
+  const el = event.target;
+  const pref = el.getAttribute("data-pref");
+  const value = el.checked ? 1 : 0;
   setPref(pref, value);
 }
 
 function handleBoolChange(event) {
-  let el = event.target;
-  let pref = el.getAttribute("data-pref"),
-    value = el.checked;
+  const el = event.target;
+  const pref = el.getAttribute("data-pref");
+  const value = el.checked;
   setPref(pref, value);
 }
 
 function handleRadioChange(event) {
-  let el = event.target;
-  let pref = el.name,
-    value = el.value;
+  const el = event.target;
+  const pref = el.name;
+  const { value } = el;
   setPref(pref, +value);
 }
 
-let settingsPromise = browser.storage.local
+const settingsPromise = browser.storage.local
   .get(DefaultPrefs)
   .then(data => {
     Prefs = data;
   })
   .catch(e => {
-    throw new Error("unable to read prefs: " + String(e));
+    throw new Error(`unable to read prefs: ${String(e)}`);
   });
 
 Promise.all([loadPromise, settingsPromise, animationBehaviorPromise])
@@ -121,10 +120,10 @@ Promise.all([loadPromise, settingsPromise, animationBehaviorPromise])
   })
   .then(([, , behavior]) => {
     // Special: pause-by-default uses the global animation behavior setting
-    let pauseEl = document.getElementById("pause-by-default");
+    const pauseEl = document.getElementById("pause-by-default");
     pauseEl.checked = behavior === "none";
-    pauseEl.onchange = function() {
-      let value = this.checked ? "none" : "normal";
+    pauseEl.onchange = () => {
+      const value = this.checked ? "none" : "normal";
       browser.browserSettings.imageAnimationBehavior
         .set({ value })
         .catch(e => console.error(e));
@@ -138,36 +137,38 @@ Promise.all([loadPromise, settingsPromise, animationBehaviorPromise])
     };
 
     // Radio buttons, currently just with int values
-    for (let pref of ["hoverPauseWhen"]) {
-      let els = document.getElementsByName(pref);
-      let val = Prefs[pref];
-      for (let el of els) {
-        if (+el.value === val) el.checked = true;
+    ["hoverPauseWhen"].forEach(pref => {
+      const els = document.getElementsByName(pref);
+      const val = Prefs[pref];
+
+      els.forEach(el => {
+        el.setAttribute("checked", el.value === val);
         el.addEventListener("change", handleRadioChange, false);
-      }
-    }
+      });
+    });
 
     // All other kinds of prefs
-    for (let el of document.querySelectorAll("[data-pref]")) {
-      let name = el.getAttribute("data-pref");
-      let type = el.getAttribute("data-type");
-      var pr = Prefs[name];
+    document.querySelectorAll("[data-pref]").forEach(el => {
+      const name = el.getAttribute("data-pref");
+      const type = el.getAttribute("data-type");
+      const pr = Prefs[name];
+
       if (type === "shortcut") {
         if (typeof pr !== "string") throw new Error("must be a string pref");
         el.addEventListener("keydown", handleShortcutKeyDown, false);
-        el.value = pr;
+        el.setAttribute("value", pr);
       } else if (type === "boolint") {
         if (typeof pr !== "number") throw new Error("must be an int pref");
         el.addEventListener("change", handleBoolIntChange, false);
-        el.checked = pr !== 0;
+        el.setAttribute("checked", pr !== 0);
       } else if (el.type === "checkbox") {
         if (typeof pr !== "boolean") throw new Error("must be a bool pref");
         el.addEventListener("change", handleBoolChange, false);
-        el.checked = pr;
+        el.setAttribute("checked", pr);
       } else {
-        throw new Error("unrecognized " + name);
+        throw new Error(`unrecognized ${name}`);
       }
-    }
+    });
 
     document.body.hidden = false;
   });
