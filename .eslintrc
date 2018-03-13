@@ -5,6 +5,8 @@
   },
   "plugins": ["prettier", "json"],
   "rules": {
-    "no-console": ["error", { "allow": ["info", "warn", "error"] }]
+    "no-console": ["error", { "allow": ["info", "warn", "error"] }],
+    "no-bitwise": 0,
+    "no-plusplus": ["error", { "allowForLoopAfterthoughts": true }]
   }
 }
