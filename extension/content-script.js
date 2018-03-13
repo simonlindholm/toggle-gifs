@@ -1,9 +1,8 @@
 /* global browser, window, document, location, console */
-"use strict";
 
 // Put everything in a closure, to pre-emptively work around
 // https://bugzilla.mozilla.org/show_bug.cgi?id=1408996
-(function() {
+(() => {
   // ==== Constants ====
 
   // Keep in sync with settings.js!
@@ -60,8 +59,8 @@
 
   const HoverPause = { Never: 0, Next: 1, Unhover: 2, ClickOutside: 3 };
 
-  const ButtonsMinWidth = 60,
-    ButtonsMinHeight = 40;
+  const ButtonsMinWidth = 60;
+  const ButtonsMinHeight = 40;
 
   const OverlayCss = `
 #toggleGifsOverlay, #toggleGifsOverlay * {
@@ -94,24 +93,24 @@
 
   // Animation state for the document, either "none", "once" or "normal".
   // Set upon init, when the parent tells us the right value.
-  var AnimationBehavior = null;
+  let AnimationBehavior = null;
 
-  var IsTumblr = location.host.indexOf("tumblr") !== -1;
-  var IsPinterest = location.host.indexOf("pinterest") !== -1;
+  const IsTumblr = document.location.host.indexOf("tumblr") !== -1;
+  const IsPinterest = document.location.host.indexOf("pinterest") !== -1;
 
   // ==== Global state ====
 
-  var WantedAnimationBehavior = null;
-  var CurrentHover = null;
-  var LastToggledImage = null;
-  var HoveredNonanimatedImage = null;
-  var NonDefaultFrame = null;
-  var NonDefaultFramePromise = null;
-  var AnimationIndicators = new Set();
-  var HasInjectedCss = false;
-  var HasInjectedSvg = false;
-  var SeenAnyAnimated = false;
-  var Prefs = null;
+  let WantedAnimationBehavior = null;
+  let CurrentHover = null;
+  let LastToggledImage = null;
+  let HoveredNonanimatedImage = null;
+  let NonDefaultFrame = null;
+  let NonDefaultFramePromise = null;
+  let AnimationIndicators = new Set();
+  let HasInjectedCss = false;
+  let HasInjectedSvg = false;
+  let SeenAnyAnimated = false;
+  let Prefs = null;
 
   // 1 = yes, 2 = waiting.
   // No signal for "no", because some requests might never hit the network,
@@ -120,30 +119,30 @@
   // For simplicity we let this leak without bounds, because it will vanish
   // when the tab closes. (An LRU cache would also be an option, but then
   // resetImagesInWindow would have to change.)
-  var AnimatedMap = new Map();
+  const AnimatedMap = new Map();
 
   // ==== Expando symbols ====
 
-  var eAwaitingPlay = "toggleGifs-awaitingPlay";
-  var eAnimationState = "toggleGifs-animationState";
-  var eCheckedAnimation = "toggleGifs-checkedAnimation";
-  var eHasHovered = "toggleGifs-hasHovered";
-  var eTooSmall = "toggleGifs-tooSmall";
-  var eOnLoad = "toggleGifs-onLoad";
-  var eShownIndicator = "toggleGifs-shownIndicator";
-  var eInitedGifv = "toggleGifs-initedGifv";
-  var eRelatedTo = "toggleGifs-relatedTo";
-  var eFakeImage = "toggleGifs-fakeImage";
-  var eHandledPinterest = "toggleGifs-handledPinterest";
-  var ePositionAsIf = "toggleGifs-positionAsIf";
-  var eImageClone = "toggleGifs-imageClone";
+  const eAwaitingPlay = "toggleGifs-awaitingPlay";
+  const eAnimationState = "toggleGifs-animationState";
+  const eCheckedAnimation = "toggleGifs-checkedAnimation";
+  const eHasHovered = "toggleGifs-hasHovered";
+  const eTooSmall = "toggleGifs-tooSmall";
+  const eOnLoad = "toggleGifs-onLoad";
+  const eShownIndicator = "toggleGifs-shownIndicator";
+  const eInitedGifv = "toggleGifs-initedGifv";
+  const eRelatedTo = "toggleGifs-relatedTo";
+  const eFakeImage = "toggleGifs-fakeImage";
+  const eHandledPinterest = "toggleGifs-handledPinterest";
+  const ePositionAsIf = "toggleGifs-positionAsIf";
+  const eImageClone = "toggleGifs-imageClone";
 
   // ==== Helpers ====
 
   // Keep in sync with settings.js!
   function keyDownEventToString(event) {
     function keyToString(ev) {
-      let { which, key } = ev;
+      const { which, key } = ev;
       if (which === 27) return "Esc";
       if (which === 32) return "Space";
       if (which === 13) return "Enter";
@@ -151,16 +150,22 @@
       return key.length === 1 ? key.toUpperCase() : key;
     }
     function accelToString(ev) {
-      var accel = "";
+      let accel = "";
       if (ev.ctrlKey) accel += "Ctrl+";
       if (ev.metaKey) accel += "Meta+";
       if (ev.shiftKey) accel += "Shift+";
       if (ev.altKey) accel += "Alt+";
       return accel;
     }
-    var key = keyToString(event),
-      accel = accelToString(event);
+    const key = keyToString(event);
+    const accel = accelToString(event);
     return key ? accel + key : "";
+  }
+
+  function delay(ms) {
+    return new Promise(resolve => {
+      window.setTimeout(resolve, ms);
+    });
   }
 
   // Needed due to https://bugzilla.mozilla.org/show_bug.cgi?id=1369841.
@@ -169,8 +174,9 @@
       return browser.runtime.sendMessage(msg).catch(e => {
         if (dur >= 5000)
           throw new Error(
-            "Failed to talk to background script even after retries: " +
-              String(e)
+            `Failed to talk to background script even after retries: ${String(
+              e
+            )}`
           );
         if (attempt === 0)
           console.warn(
@@ -198,14 +204,8 @@
     // Do nothing.
   }
 
-  function delay(ms) {
-    return new Promise(resolve => {
-      window.setTimeout(resolve, ms);
-    });
-  }
-
   function forEachAnimationIndicator(func) {
-    for (var el of AnimationIndicators) {
+    AnimationIndicators.forEach(el => {
       try {
         func(el);
       } catch (ex) {
@@ -213,14 +213,14 @@
         AnimationIndicators.delete(el);
         console.error(ex);
       }
-    }
+    });
   }
 
-  function inViewport(el) {
-    el = el[ePositionAsIf] || el;
+  function inViewport(element) {
+    const el = element[ePositionAsIf] || element;
     if (el.ownerDocument !== document || !document.contains(el)) return false;
     if (window.getComputedStyle(el).display === "none") return false;
-    var re = el.getClientRects()[0];
+    const re = el.getClientRects()[0];
     return re && re.bottom > 0 && re.top < window.innerHeight;
   }
 
@@ -228,6 +228,7 @@
     // Hide an element from the eye and prevent it from affecting layout, but
     // keep it visible for Firefox's GIF-rendering code.
     // TODO
+    console.info("semiHide", el);
   }
 
   function waitForPaint(callback, num = 1) {
@@ -268,57 +269,19 @@
   }
 
   function imageTooSmall(el) {
-    var ret = el[eTooSmall];
+    let ret = el[eTooSmall];
     if (ret !== undefined) return ret;
     if (el.width && el.height)
       ret = el.width < ButtonsMinWidth || el.height < ButtonsMinHeight;
     else
       ret =
         el.offsetWidth < ButtonsMinWidth || el.offsetHeight < ButtonsMinHeight;
-    el[eTooSmall] = ret;
+    el.setAttribut(eTooSmall, ret);
     return ret;
   }
 
-  function resetImageAnimation(img) {
-    if (img.tagName === "VIDEO") {
-      img.currentTime = 0;
-    } else {
-      // The basic idea here is to do "img.src = img.src", which works
-      // without side effects because of:
-      // https://html.spec.whatwg.org/multipage/images.html#reacting-to-dom-mutations
-      // However, things get more complex in weird states.
-      if (getAnimationState(img) === "normal") {
-        new window.Image().src = img.src;
-      } else {
-        if (AnimationBehavior === "none") {
-          // We cannot reset paused images if we are ourselves paused.
-          if (img[eAnimationState] && NonDefaultFrame) {
-            setAnimationState(img, "normal");
-            // XXX then async?
-            img.src = img.src;
-          }
-        } else {
-          // The first "img.src = img.src" will cause the image to start
-          // playing, the second to reset. Then we stop it again.
-          img.src = img.src;
-          img.src = img.src;
-          img[eAnimationState] = "normal";
-          setAnimationState(img, "none");
-        }
-      }
-    }
-  }
-
-  function getAnimationState(el) {
-    if (el.tagName === "VIDEO") {
-      return el.paused ? "none" : "normal";
-    } else {
-      return el[eAnimationState] || AnimationBehavior;
-    }
-  }
-
   function withImageClone(el, callback) {
-    var cl = el[eImageClone];
+    let cl = el[eImageClone];
     if (cl) {
       if (cl.src !== el.src) {
         cl.remove();
@@ -331,26 +294,26 @@
       // It is impossible to clone images with srcset and have them share
       // animation mode... So let's convert the image to not use srcset, so
       // we get slightly more control over it. Occurs on wikipedia, mainly.
-      let src = el.currentSrc;
+      const src = el.currentSrc;
       el.removeAttribute("srcset");
       el.removeAttribute("sizes");
-      el[eOnLoad] = () => {
+      el.setAttribut(eOnLoad, () => {
         // For reasons I don't fully understand, we sometimes need to
         // wait a bit after load for pausing to work.
         waitForPaint(() => {
           withImageClone(el, callback);
         });
-      };
-      if (src) el.src = src;
+      });
+      if (src) el.setAttribute("src", src);
       return;
     }
 
     cl = el.cloneNode(false);
-    for (var attr of cl.getAttributeNames()) {
+    cl.getAttributeNames().forEach(attr => {
       if (attr !== "src") cl.removeAttribute(attr);
-    }
+    });
     semiHide(cl);
-    el[eImageClone] = cl;
+    el.setAttribute(eImageClone, cl);
     callback(cl);
   }
 
@@ -365,7 +328,7 @@
     }
     if (!NonDefaultFramePromise) {
       NonDefaultFramePromise = new Promise((resolve, fail) => {
-        var key = Date.now() + "." + Math.random();
+        const key = `${Date.now()}.${Math.random()}`;
         browser.runtime
           .sendMessage({
             type: "temporary-behavior",
@@ -373,7 +336,7 @@
             key
           })
           .then(() => {
-            var ifr = document.createElement("iframe");
+            const ifr = document.createElement("iframe");
             ifr.setAttribute("toggle-gifs-frame", "");
             ifr.srcdoc = "<!DOCTYPE html><body></body>";
             ifr.addEventListener(
@@ -420,9 +383,9 @@
       if (state === "normal") el.play();
       else el.pause();
     } else {
-      let currentState = el[eAnimationState] || AnimationBehavior;
+      const currentState = el[eAnimationState] || AnimationBehavior;
       if (currentState === state) return;
-      el[eAnimationState] = state;
+      el.setAttribute(eAnimationState, state);
       if (state === AnimationBehavior) {
         withImageClone(el, cl => {
           document.body.appendChild(cl);
@@ -437,145 +400,75 @@
     }
   }
 
+  function getAnimationState(el) {
+    if (el.tagName === "VIDEO") {
+      return el.paused ? "none" : "normal";
+    }
+    return el[eAnimationState] || AnimationBehavior;
+  }
+
+  function resetImageAnimation(img) {
+    if (img.tagName === "VIDEO") {
+      img.setAttribute("currentTime", 0);
+    } else if (getAnimationState(img) === "normal") {
+      // The basic idea here is to do "img.src = img.src", which works
+      // without side effects because of:
+      // https://html.spec.whatwg.org/multipage/images.html#reacting-to-dom-mutations
+      // However, things get more complex in weird states.
+      new window.Image().src = img.src;
+    } else if (
+      AnimationBehavior === "none" &&
+      (img[eAnimationState] && NonDefaultFrame)
+    ) {
+      // We cannot reset paused images if we are ourselves paused.
+      setAnimationState(img, "normal");
+      // XXX then async?
+      img.setAttribute("src", img.src);
+    } else {
+      // The first "img.src = img.src" will cause the image to start
+      // playing, the second to reset. Then we stop it again.
+      img.setAttribute("src", img.src);
+      img.setAttribute("src", img.src);
+      img.setAttribute(eAnimationState, "normal");
+      setAnimationState(img, "none");
+    }
+  }
+
   function isAnimatedImage(el) {
     if (el.tagName === "VIDEO") {
       return isGifv(el);
-    } else {
-      return el.tagName === "IMG" && AnimatedMap.get(hash(el.src)) === 1;
     }
+    return el.tagName === "IMG" && AnimatedMap.get(hash(el.src)) === 1;
   }
 
   // ==== Application logic ====
-
-  // ==== Click listeners ====
-
-  function onClick(event) {
-    if (!isLeftClick(event) || CurrentHover) return;
-    if (LastToggledImage) {
-      setAnimationState(LastToggledImage, "none");
-    }
-    LastToggledImage = null;
-    forEachAnimationIndicator(updateIndicator);
-  }
-
-  function updateClickListeners() {
-    var shouldAdd = Prefs.hoverPauseWhen === HoverPause.ClickOutside;
-    if (shouldAdd) window.addEventListener("click", onClick);
-    else window.removeEventListener("click", onClick);
-  }
-
-  // ==== Key listeners ====
-
-  function resetImagesInWindow() {
-    // (Unfortunately this doesn't reach CSS background images. We could fix
-    // that by calling getComputedStyle on *everything*, or by sending URLs of
-    // non-<img>s down from the parent, and then doing 'new Image().src = url'.
-    // But it's a bit complex.)
-    var any = false;
-    for (var tagName of ["video", "img"]) {
-      for (var el of document.getElementsByTagName(tagName)) {
-        if (isAnimatedImage(el)) {
-          resetImageAnimation(el);
-          any = true;
-        }
-      }
-    }
-    return any;
-  }
-
-  function toggleImagesInWindow() {
-    var curState = WantedAnimationBehavior;
-
-    // If we've toggled an individual image, and it's still in the viewport,
-    // go by that instead of by the global animation mode.
-    if (
-      LastToggledImage &&
-      inViewport(LastToggledImage) &&
-      isAnimatedImage(LastToggledImage)
-    ) {
-      curState = getAnimationState(LastToggledImage);
-    }
-
-    WantedAnimationBehavior = curState === "none" ? "normal" : "none";
-
-    var any = false;
-    for (var tagName of ["video", "img"]) {
-      for (var el of document.getElementsByTagName(tagName)) {
-        if (isAnimatedImage(el)) {
-          setAnimationState(el, WantedAnimationBehavior);
-          any = true;
-        }
-      }
-    }
-
-    if (CurrentHover) CurrentHover.refresh();
-    forEachAnimationIndicator(updateIndicator);
-
-    return any || SeenAnyAnimated;
-  }
-
-  function onKeydown(event) {
-    if (!event.isTrusted || event.defaultPrevented) return;
-    var str = keyDownEventToString(event);
-    if (!str || !(str === Prefs.shortcutToggle || str === Prefs.shortcutReset))
-      return;
-
-    // In case of modifier-less binding, we want to be a bit careful and
-    // only cancel the event in case the shortcut actually had an effect.
-    var shouldCancel = event.ctrlKey || event.metaKey || event.altKey;
-
-    if (str === Prefs.shortcutToggle)
-      shouldCancel = toggleImagesInWindow() || shouldCancel;
-
-    if (str === Prefs.shortcutReset)
-      shouldCancel = resetImagesInWindow() || shouldCancel;
-
-    if (shouldCancel) cancelEvent(event);
-  }
-
-  function updateKeyListeners() {
-    var shouldAdd = Prefs.shortcutToggle || Prefs.shortcutReset;
-    if (shouldAdd) window.addEventListener("keydown", onKeydown);
-    else window.removeEventListener("keydown", onKeydown);
-  }
-
-  // ==== Overlay ====
-
-  function injectOverlayCss() {
-    if (HasInjectedCss) return;
-    HasInjectedCss = true;
-    var css = document.createElement("style");
-    css.textContent = OverlayCss;
-    css.style.display = "none";
-    document.documentElement.appendChild(css);
-  }
 
   function injectIndicatorSvg() {
     if (HasInjectedSvg) return;
     HasInjectedSvg = true;
 
     function cr(name, attrs) {
-      var ret = document.createElementNS("http://www.w3.org/2000/svg", name);
-      for (var a in attrs) ret.setAttribute(a, attrs[a]);
+      const ret = document.createElementNS("http://www.w3.org/2000/svg", name);
+      attrs.forEach(a => ret.setAttribute(a, attrs[a]));
       return ret;
     }
 
-    var svg = cr("svg", { width: "0", height: "0" });
+    const svg = cr("svg", { width: "0", height: "0" });
     svg.setAttributeNS(
       "http://www.w3.org/2000/xmlns/",
       "xmlns:xlink",
       "http://www.w3.org/1999/xlink"
     );
     svg.style.position = "absolute";
-    var defs = cr("defs", {});
-    var filter = cr("filter", {
+    const defs = cr("defs", {});
+    const filter = cr("filter", {
       id: "toggleGifsIndicatorFilter",
       x: "0",
       y: "0",
       width: "100%",
       height: "100%"
     });
-    var feImage = cr("feImage", {
+    const feImage = cr("feImage", {
       preserveAspectRatio: "xMaxYMin meet",
       width: "100%",
       height: "19",
@@ -587,7 +480,7 @@
       "xlink:href",
       PlayIcon
     );
-    var feComposite = cr("feComposite", {
+    const feComposite = cr("feComposite", {
       operator: "over",
       in: "img",
       in2: "SourceGraphic"
@@ -599,14 +492,11 @@
     document.documentElement.appendChild(svg);
   }
 
-  function updateIndicatorForTarget(event) {
-    if (event.isTrusted) updateIndicator(event.target);
-  }
-
-  function updateIndicator(el) {
+  function updateIndicator(element) {
+    const el = element;
     if (Prefs.indicatorStyle === 0 || imageTooSmall(el)) return;
 
-    var shouldShow = getAnimationState(el) !== "normal";
+    let shouldShow = getAnimationState(el) !== "normal";
     if (Prefs.showOverlays && CurrentHover && CurrentHover.element === el) {
       shouldShow = false;
     }
@@ -621,36 +511,142 @@
           el.style.transition = "opacity 0.4s";
           el.style.opacity = "0.2";
         }
-        el[eShownIndicator] = true;
+        el.setAttribute(eShownIndicator, true);
       }
-    } else {
-      if (Prefs.indicatorStyle === 1) el.style.filter = "none";
-      else if (Prefs.indicatorStyle === 2) el.style.opacity = "1";
-    }
+    } else if (Prefs.indicatorStyle === 1) el.style.filter = "none";
+    else if (Prefs.indicatorStyle === 2) el.style.opacity = "1";
 
     if (el.tagName === "VIDEO" && !AnimationIndicators.has(el)) {
       // A playing video with an SVG filter kills performance, so as a safety measure,
       // remove the indicator again if the video is played by script.
-      el.addEventListener("play", updateIndicatorForTarget);
+      el.addEventListener(
+        "play",
+        event => event.isTrusted && updateIndicator(event.target)
+      );
     }
     AnimationIndicators.add(el);
   }
 
+  // ==== Click listeners ====
+
+  function onClick(event) {
+    if (!isLeftClick(event) || CurrentHover) return;
+    if (LastToggledImage) {
+      setAnimationState(LastToggledImage, "none");
+    }
+    LastToggledImage = null;
+    forEachAnimationIndicator(updateIndicator);
+  }
+
+  function updateClickListeners() {
+    const shouldAdd = Prefs.hoverPauseWhen === HoverPause.ClickOutside;
+    if (shouldAdd) window.addEventListener("click", onClick);
+    else window.removeEventListener("click", onClick);
+  }
+
+  // ==== Key listeners ====
+
+  function resetImagesInWindow() {
+    // (Unfortunately this doesn't reach CSS background images. We could fix
+    // that by calling getComputedStyle on *everything*, or by sending URLs of
+    // non-<img>s down from the parent, and then doing 'new Image().src = url'.
+    // But it's a bit complex.)
+    let any = false;
+    ["video", "img"].forEach(tagName => {
+      document.getElementsByTagName(tagName).forEach(el => {
+        if (isAnimatedImage(el)) {
+          resetImageAnimation(el);
+          any = true;
+        }
+      });
+    });
+    return any;
+  }
+
+  function toggleImagesInWindow() {
+    let curState = WantedAnimationBehavior;
+
+    // If we've toggled an individual image, and it's still in the viewport,
+    // go by that instead of by the global animation mode.
+    if (
+      LastToggledImage &&
+      inViewport(LastToggledImage) &&
+      isAnimatedImage(LastToggledImage)
+    ) {
+      curState = getAnimationState(LastToggledImage);
+    }
+
+    WantedAnimationBehavior = curState === "none" ? "normal" : "none";
+
+    let any = false;
+    ["video", "img"].forEach(tagName => {
+      document.getElementsByTagName(tagName).forEach(el => {
+        if (isAnimatedImage(el)) {
+          setAnimationState(el, WantedAnimationBehavior);
+          any = true;
+        }
+      });
+    });
+
+    if (CurrentHover) CurrentHover.refresh();
+    forEachAnimationIndicator(updateIndicator);
+
+    return any || SeenAnyAnimated;
+  }
+
+  function onKeydown(event) {
+    if (!event.isTrusted || event.defaultPrevented) return;
+    const str = keyDownEventToString(event);
+    if (!str || !(str === Prefs.shortcutToggle || str === Prefs.shortcutReset))
+      return;
+
+    // In case of modifier-less binding, we want to be a bit careful and
+    // only cancel the event in case the shortcut actually had an effect.
+    let shouldCancel = event.ctrlKey || event.metaKey || event.altKey;
+
+    if (str === Prefs.shortcutToggle)
+      shouldCancel = toggleImagesInWindow() || shouldCancel;
+
+    if (str === Prefs.shortcutReset)
+      shouldCancel = resetImagesInWindow() || shouldCancel;
+
+    if (shouldCancel) cancelEvent(event);
+  }
+
+  function updateKeyListeners() {
+    const shouldAdd = Prefs.shortcutToggle || Prefs.shortcutReset;
+    if (shouldAdd) window.addEventListener("keydown", onKeydown);
+    else window.removeEventListener("keydown", onKeydown);
+  }
+
+  // ==== Overlay ====
+
+  function injectOverlayCss() {
+    if (HasInjectedCss) return;
+    HasInjectedCss = true;
+    const css = document.createElement("style");
+    css.textContent = OverlayCss;
+    css.style.display = "none";
+    document.documentElement.appendChild(css);
+  }
+
   function updateAllIndicators(prev, cur) {
     if (prev > 0 && cur === 0) {
-      forEachAnimationIndicator(el => {
+      forEachAnimationIndicator(element => {
+        const el = element;
         if (prev === 1) el.style.filter = "";
         else el.style.opacity = "";
       });
       AnimationIndicators = new Set();
     } else if (prev === 0 && cur > 0) {
-      for (var tagName of ["video", "img"]) {
-        for (var el of document.getElementsByTagName(tagName)) {
+      ["video", "img"].forEach(tagName => {
+        document.getElementsByTagName(tagName).forEach(element => {
+          const el = element;
           if (isAnimatedImage(el)) {
             updateIndicator(el);
           }
-        }
-      }
+        });
+      });
     }
   }
 
@@ -690,7 +686,7 @@
 
         if (Prefs.hoverPlayOnLoad && !hasLoaded(el)) {
           LastToggledImage = el;
-          el[eHasHovered] = true;
+          el.setAttribute(eHasHovered, true);
         } else {
           CurrentHover.toggleImageAnimation();
           updateIndicator(el);
@@ -704,14 +700,14 @@
 
     injectOverlayCss();
 
-    var overlay = document.createElement("div");
+    const overlay = document.createElement("div");
     overlay.id = "toggleGifsOverlay";
 
     // (For defense against page listeners, all of these listeners should
     // really be registered on the document.)
-    var resetButton = document.createElement("span");
+    const resetButton = document.createElement("span");
     resetButton.id = "toggleGifsResetButton";
-    resetButton.style.backgroundImage = "url(" + ResetIcon + ")";
+    resetButton.style.backgroundImage = `url(${ResetIcon})`;
     resetButton.addEventListener(
       "mousedown",
       event => {
@@ -724,11 +720,12 @@
     resetButton.addEventListener("click", cancelEvent, true);
     resetButton.addEventListener("mouseup", cancelEvent, true);
 
-    var pauseButton = document.createElement("span");
+    const pauseButton = document.createElement("span");
     pauseButton.id = "toggleGifsPauseButton";
     CurrentHover.setPauseButtonAppearance = () => {
-      pauseButton.style.backgroundImage =
-        "url(" + (CurrentHover.playing ? PauseIcon : PlayIcon) + ")";
+      pauseButton.style.backgroundImage = `url(${
+        CurrentHover.playing ? PauseIcon : PlayIcon
+      })`;
     };
     CurrentHover.setPauseButtonAppearance();
     pauseButton.addEventListener(
@@ -743,17 +740,17 @@
     pauseButton.addEventListener("click", cancelEvent, true);
     pauseButton.addEventListener("mouseup", cancelEvent, true);
 
-    var content = document.createElement("span");
+    const content = document.createElement("span");
     content.id = "toggleGifsContent";
     content.appendChild(resetButton);
     content.appendChild(pauseButton);
     overlay.appendChild(content);
 
-    var offsetBase = el[ePositionAsIf] || el;
+    const offsetBase = el[ePositionAsIf] || el;
     function reposition() {
-      var par = offsetBase.offsetParent;
-      var x = offsetBase.offsetLeft,
-        y = offsetBase.offsetTop;
+      let par = offsetBase.offsetParent;
+      let x = offsetBase.offsetLeft;
+      let y = offsetBase.offsetTop;
 
       // Skip past <td>s and <table>s, which appear in the offsetParent tree
       // despite not being positioned.
@@ -768,29 +765,29 @@
       }
 
       par = par || document.body;
-      var style = window.getComputedStyle(offsetBase);
+      const style = window.getComputedStyle(offsetBase);
       y += parseFloat(style.borderTopWidth);
       x += offsetBase.offsetWidth - parseFloat(style.borderLeftWidth);
-      overlay.style.top = y + "px";
-      overlay.style.left = x + "px";
+      overlay.style.top = `${y}px`;
+      overlay.style.left = `${x}px`;
       par.appendChild(overlay);
     }
     reposition();
 
     CurrentHover.overlay = overlay;
 
-    var mo = new window.MutationObserver(reposition);
+    const mo = new window.MutationObserver(reposition);
     mo.observe(el, { attributes: true });
     CurrentHover.mo = mo;
   }
 
   function clearHoverEffect() {
     if (!CurrentHover) return;
-    var controller = CurrentHover;
+    const controller = CurrentHover;
     CurrentHover = null;
     controller.clearTimeouts();
-    var el = controller.element;
-    var overlay = controller.overlay;
+    const el = controller.element;
+    const { overlay } = controller;
     if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
     if (controller.mo) controller.mo.disconnect();
     if (
@@ -811,27 +808,27 @@
 
   function setTumblrRelatedImage(el) {
     if (el[eRelatedTo]) return true;
-    var par = el;
+    let par = el;
     while (par && !(par.classList && par.classList.contains("post")))
       par = par.parentNode;
     par = par && par.getElementsByClassName("post_content")[0];
-    var imDiv =
+    const imDiv =
       par &&
       (par.querySelector("div.photo_stage_img") ||
         par.querySelector("div.post_thumbnail_container"));
     if (imDiv) {
       if (!imDiv[eFakeImage]) {
-        var cs = window.getComputedStyle(imDiv);
-        var bg = cs && cs.backgroundImage;
+        const cs = window.getComputedStyle(imDiv);
+        const bg = cs && cs.backgroundImage;
         if (!bg) return false;
-        var r = /^url\("(.*)"\)$/.exec(bg);
-        var src = r && r[1];
+        const r = /^url\("(.*)"\)$/.exec(bg);
+        const src = r && r[1];
         if (!src) return false;
 
         // Now ideally we would replace tumblr's background-image-based thingy with
         // a real img tag. However, mimicking the exact positioning and clipping of the
         // image is difficult and fragile, so we abuse bug 332973 instead.
-        var dummyImg = document.createElement("img");
+        const dummyImg = document.createElement("img");
         dummyImg.src = src;
         // imDiv.parentNode.replaceChild(dummyImg, imDiv);
         dummyImg.style.display = "none";
@@ -840,12 +837,12 @@
         imDiv[eFakeImage] = dummyImg;
       }
 
-      el[eRelatedTo] = imDiv[eFakeImage];
+      el.setAttribute(eRelatedTo, imDiv[eFakeImage]);
       return true;
     }
-    var img = par && par.getElementsByTagName("img")[0];
+    const img = par && par.getElementsByTagName("img")[0];
     if (img) {
-      el[eRelatedTo] = img;
+      el.setAttribute(eRelatedTo, img);
       return true;
     }
     return false;
@@ -859,8 +856,8 @@
       !el.parentNode.querySelector(".playIndicatorPill.gifType")
     )
       return;
-    el[eHandledPinterest] = true;
-    var img = el.parentNode.getElementsByTagName("img")[0];
+    el.setAttribute(eHandledPinterest, true);
+    const img = el.parentNode.getElementsByTagName("img")[0];
     img.addEventListener("load", event => {
       if (!event.isTrusted) return;
       if (isAnimatedImage(img)) {
@@ -883,10 +880,10 @@
 
   function onMouseOver(event) {
     if (!event.isTrusted) return;
-    var el = event.target,
-      cl = el.className;
+    const el = event.target;
+    const cl = el.className;
 
-    var hasRelatedImage = false;
+    let hasRelatedImage = false;
     if (
       IsTumblr &&
       [
@@ -949,7 +946,7 @@
 
   function markAnimated(img) {
     if (img[eCheckedAnimation]) return;
-    img[eCheckedAnimation] = true;
+    img.setAttribute(eCheckedAnimation, true);
 
     if (img[eAwaitingPlay]) setAnimationState(img, "normal");
     else if (WantedAnimationBehavior !== AnimationBehavior)
@@ -961,9 +958,9 @@
   }
 
   function handleLoad(el) {
-    let callback = el[eOnLoad];
+    const callback = el[eOnLoad];
     if (callback) {
-      el[eOnLoad] = null;
+      el.setAttribut(eOnLoad, null);
       callback();
       return;
     }
@@ -985,7 +982,7 @@
   function handleLoadedMetadata(el) {
     if (isGifv(el)) {
       if (el[eInitedGifv]) return;
-      el[eInitedGifv] = true;
+      el.setAttribute(eInitedGifv, true);
       if (Prefs.defaultPaused) setAnimationState(el, "none");
       updateIndicator(el);
     }
@@ -994,18 +991,19 @@
   // ==== Animation detection ====
 
   function notifyAnimated(url) {
-    console.log("content-script: found animated image", url);
+    console.info("content-script: found animated image", url);
     AnimatedMap.set(hash(url), 1);
     SeenAnyAnimated = true;
-    for (var img of document.getElementsByTagName("img")) {
+
+    document.getElementsByTagName("img").forEach(img => {
       if (img.src === url) markAnimated(img);
-    }
+    });
   }
 
   function checkAnimated(img) {
-    var url = img.src,
-      key = hash(url),
-      v = AnimatedMap.get(key);
+    const url = img.src;
+    const key = hash(url);
+    const v = AnimatedMap.get(key);
     if (v === 1) {
       markAnimated(img);
     } else if (v !== 2) {
@@ -1023,8 +1021,8 @@
   // ==== Initialization ====
 
   function updatePref(pref, value) {
-    console.log("updated setting", pref, value);
-    var last = Prefs[pref];
+    console.info("updated setting", pref, value);
+    const last = Prefs[pref];
     Prefs[pref] = value;
     if (pref === "shortcutReset" || pref === "shortcutToggle")
       updateKeyListeners();
@@ -1035,19 +1033,19 @@
 
   function init() {
     // Don't do *anything* if this frame is a dummy frame created by ourselves.
-    let fr = window.frameElement;
+    const fr = window.frameElement;
     if (fr && fr.hasAttribute("toggle-gifs-frame")) return;
 
-    let settingsPromise = browser.storage.local
+    const settingsPromise = browser.storage.local
       .get(DefaultPrefs)
       .then(data => {
         Prefs = data;
       })
       .catch(e => {
-        throw new Error("unable to read prefs: " + String(e));
+        throw new Error(`unable to read prefs: ${String(e)}`);
       });
 
-    let animationBehaviorPromise = sendMessageWithRetry({
+    const animationBehaviorPromise = sendMessageWithRetry({
       type: "query-animation-behavior"
     }).then(behavior => {
       // Assume 'behavior', as just queried from the global pref, is correct
@@ -1056,13 +1054,13 @@
       WantedAnimationBehavior = AnimationBehavior;
     });
 
-    let loadedPromise = Promise.all([
+    const loadedPromise = Promise.all([
       settingsPromise,
       animationBehaviorPromise
     ]);
 
-    var inited = false;
-    var loadQueue = [];
+    let inited = false;
+    let loadQueue = [];
     function callWhenLoaded(callback) {
       if (inited) callback();
       else loadQueue.push(callback);
@@ -1071,27 +1069,28 @@
     settingsPromise.then(() => {
       browser.storage.onChanged.addListener((changes, area) => {
         if (area !== "local") return;
-        for (var pref in changes) {
+
+        changes.forEach(pref => {
           if (pref in DefaultPrefs) {
-            let val = changes[pref].newValue;
+            const val = changes[pref].newValue;
             if (inited) {
               updatePref(pref, val);
             } else {
               Prefs[pref] = val;
             }
           }
-        }
+        });
       });
     });
 
     function onLoadStart(event) {
-      var el = event.target;
+      const el = event.target;
       if (event.isTrusted && el.tagName === "IMG")
         callWhenLoaded(() => handleLoadStart(el));
     }
 
     function onLoad(event) {
-      var el = event.target;
+      const el = event.target;
       if (event.isTrusted && el.tagName === "IMG")
         callWhenLoaded(() => handleLoad(el));
     }
@@ -1106,7 +1105,7 @@
     window.addEventListener("loadedmetadata", onLoadedMetadata, true);
 
     loadedPromise.then(() => {
-      console.log("content-script init", AnimationBehavior);
+      console.info("content-script init", AnimationBehavior);
       inited = true;
 
       updateKeyListeners();
@@ -1121,13 +1120,13 @@
         }
       });
 
-      for (let callback of loadQueue) {
+      loadQueue.forEach(callback => {
         try {
           callback();
         } catch (e) {
           console.error(e);
         }
-      }
+      });
       loadQueue = null;
     });
   }
