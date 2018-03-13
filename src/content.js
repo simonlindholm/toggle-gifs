@@ -1,16 +1,6 @@
-// ==== Constants ====
+import defaultPrefs from "./defaultPrefs";
 
-// Keep in sync with settings.js!
-const DefaultPrefs = {
-  hoverPauseWhen: 1,
-  hoverPlayOnLoad: false,
-  indicatorStyle: 0,
-  playOnHover: false,
-  shortcutReset: "",
-  shortcutToggle: "",
-  showOverlays: true,
-  supportGifv: true
-};
+// ==== Constants ====
 
 // From http://chrfb.deviantart.com/, licensed under CC by-nc-sa.
 const PauseIcon =
@@ -1030,7 +1020,7 @@ function init() {
   if (fr && fr.hasAttribute("toggle-gifs-frame")) return;
 
   const settingsPromise = browser.storage.local
-    .get(DefaultPrefs)
+    .get(defaultPrefs)
     .then(data => {
       Prefs = data;
     })
@@ -1064,7 +1054,7 @@ function init() {
       if (area !== "local") return;
 
       changes.forEach(pref => {
-        if (pref in DefaultPrefs) {
+        if (pref in defaultPrefs) {
           const val = changes[pref].newValue;
           if (inited) {
             updatePref(pref, val);

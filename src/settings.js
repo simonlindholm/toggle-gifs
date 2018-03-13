@@ -1,14 +1,4 @@
-// Keep in sync with content-script.js!
-const DefaultPrefs = {
-  hoverPauseWhen: 1,
-  hoverPlayOnLoad: false,
-  indicatorStyle: 0,
-  playOnHover: false,
-  shortcutReset: "",
-  shortcutToggle: "",
-  showOverlays: true,
-  supportGifv: true
-};
+import defaultPrefs from "./defaultPrefs";
 
 function keyDownEventToString(event) {
   function keyToString(ev) {
@@ -101,7 +91,7 @@ function handleRadioChange(event) {
 }
 
 const settingsPromise = browser.storage.local
-  .get(DefaultPrefs)
+  .get(defaultPrefs)
   .then(data => {
     Prefs = data;
   })
