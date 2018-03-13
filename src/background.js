@@ -1,6 +1,3 @@
-/* global console, browser, setTimeout, clearTimeout */
-/* eslint new-cap: off */
-
 // Max memory usage: (200 + 200) * 500 bytes = 200 kB; less in practice.
 // Plus information about the waiting tabs, and data structure overhead.
 const LRU_CACHE_SIZE = 200;

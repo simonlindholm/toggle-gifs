@@ -1,6 +1,3 @@
-/* eslint-env browser */
-/* global browser */
-
 // Keep in sync with content-script.js!
 const DefaultPrefs = {
   hoverPauseWhen: 1,
