@@ -1,0 +1,10 @@
+{
+  "extends": ["airbnb", "prettier"],
+  "env": {
+    "browser": 1
+  },
+  "plugins": ["prettier", "json"],
+  "rules": {
+    "no-console": ["error", { "allow": ["warn", "error"] }]
+  }
+}
