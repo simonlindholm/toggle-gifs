@@ -7,11 +7,12 @@
   "author": "Simon Lindholm",
   "license": "CC0-1.0",
   "scripts": {
-    "prettier": "prettier --write **/*.js",
-    "eslint": "eslint --fix **/*.js",
+    "prettier": "prettier --write **/*.{js,json}",
+    "eslint": "eslint --ignore-path .gitignore --fix **/*.js",
+    "dev": "webpack --watch --mode development",
     "extension": "web-ext -s ./extension",
     "lint": "yarn extension lint",
-    "start": "yarn extension run"
+    "start": "yarn dev & yarn extension run"
   },
   "dependencies": {
     "eslint": "^4.18.2",
@@ -23,6 +24,8 @@
     "eslint-plugin-prettier": "^2.6.0",
     "eslint-plugin-react": "^7.7.0",
     "prettier": "^1.11.1",
-    "web-ext": "^2.4.0"
+    "web-ext": "^2.4.0",
+    "webpack": "^4.1.1",
+    "webpack-cli": "^2.0.11"
   }
 }
