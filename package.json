@@ -12,7 +12,7 @@
     "dev": "webpack --watch --mode development",
     "extension": "web-ext -s ./extension",
     "lint": "yarn extension lint",
-    "start": "yarn dev & yarn extension run"
+    "start": "yarn dev & yarn extension run --url ./example/gif.html"
   },
   "dependencies": {
     "babel-core": "^6.26.0",
