@@ -259,7 +259,7 @@ function imageTooSmall(el) {
   else
     ret =
       el.offsetWidth < ButtonsMinWidth || el.offsetHeight < ButtonsMinHeight;
-  el.setAttribut(eTooSmall, ret);
+  el[eTooSmall] = ret;
   return ret;
 }
 
@@ -280,14 +280,14 @@ function withImageClone(el, callback) {
     const src = el.currentSrc;
     el.removeAttribute("srcset");
     el.removeAttribute("sizes");
-    el.setAttribut(eOnLoad, () => {
+    el[eOnLoad] = () => {
       // For reasons I don't fully understand, we sometimes need to
       // wait a bit after load for pausing to work.
       waitForPaint(() => {
         withImageClone(el, callback);
       });
-    });
-    if (src) el.setAttribute("src", src);
+    };
+    if (src) el.src = src;
     return;
   }
 
@@ -296,7 +296,7 @@ function withImageClone(el, callback) {
     if (attr !== "src") cl.removeAttribute(attr);
   });
   semiHide(cl);
-  el.setAttribute(eImageClone, cl);
+  el[eImageClone] = cl;
   callback(cl);
 }
 
@@ -368,7 +368,7 @@ function setAnimationState(el, state) {
   } else {
     const currentState = el[eAnimationState] || AnimationBehavior;
     if (currentState === state) return;
-    el.setAttribute(eAnimationState, state);
+    el[eAnimationState] = state;
     if (state === AnimationBehavior) {
       withImageClone(el, cl => {
         document.body.appendChild(cl);
@@ -392,7 +392,7 @@ function getAnimationState(el) {
 
 function resetImageAnimation(img) {
   if (img.tagName === "VIDEO") {
-    img.setAttribute("currentTime", 0);
+    img.currentTime = 0;
   } else if (getAnimationState(img) === "normal") {
     // The basic idea here is to do "img.src = img.src", which works
     // without side effects because of:
@@ -406,13 +406,13 @@ function resetImageAnimation(img) {
     // We cannot reset paused images if we are ourselves paused.
     setAnimationState(img, "normal");
     // XXX then async?
-    img.setAttribute("src", img.src);
+    img.src = img.src;
   } else {
     // The first "img.src = img.src" will cause the image to start
     // playing, the second to reset. Then we stop it again.
-    img.setAttribute("src", img.src);
-    img.setAttribute("src", img.src);
-    img.setAttribute(eAnimationState, "normal");
+    img.src = img.src;
+    img.src = img.src;
+    img[eAnimationState] = "normal";
     setAnimationState(img, "none");
   }
 }
@@ -475,8 +475,11 @@ function injectIndicatorSvg() {
   document.documentElement.appendChild(svg);
 }
 
-function updateIndicator(element) {
-  const el = element;
+function updateIndicator(el) {
+  const updateIndicatorForTarget = event => {
+    if (event.isTrusted) updateIndicator(event.target);
+  };
+
   if (Prefs.indicatorStyle === 0 || imageTooSmall(el)) return;
 
   let shouldShow = getAnimationState(el) !== "normal";
@@ -494,7 +497,7 @@ function updateIndicator(element) {
         el.style.transition = "opacity 0.4s";
         el.style.opacity = "0.2";
       }
-      el.setAttribute(eShownIndicator, true);
+      el[eShownIndicator] = true;
     }
   } else if (Prefs.indicatorStyle === 1) el.style.filter = "none";
   else if (Prefs.indicatorStyle === 2) el.style.opacity = "1";
@@ -502,10 +505,7 @@ function updateIndicator(element) {
   if (el.tagName === "VIDEO" && !AnimationIndicators.has(el)) {
     // A playing video with an SVG filter kills performance, so as a safety measure,
     // remove the indicator again if the video is played by script.
-    el.addEventListener(
-      "play",
-      event => event.isTrusted && updateIndicator(event.target)
-    );
+    el.addEventListener("play", updateIndicatorForTarget);
   }
   AnimationIndicators.add(el);
 }
@@ -615,16 +615,14 @@ function injectOverlayCss() {
 
 function updateAllIndicators(prev, cur) {
   if (prev > 0 && cur === 0) {
-    forEachAnimationIndicator(element => {
-      const el = element;
+    forEachAnimationIndicator(el => {
       if (prev === 1) el.style.filter = "";
       else el.style.opacity = "";
     });
     AnimationIndicators = new Set();
   } else if (prev === 0 && cur > 0) {
     ["video", "img"].forEach(tagName => {
-      document.getElementsByTagName(tagName).forEach(element => {
-        const el = element;
+      document.getElementsByTagName(tagName).forEach(el => {
         if (isAnimatedImage(el)) {
           updateIndicator(el);
         }
@@ -669,7 +667,7 @@ function applyHoverEffect(el) {
 
       if (Prefs.hoverPlayOnLoad && !hasLoaded(el)) {
         LastToggledImage = el;
-        el.setAttribute(eHasHovered, true);
+        el[eHasHovered] = true;
       } else {
         CurrentHover.toggleImageAnimation();
         updateIndicator(el);
@@ -820,12 +818,12 @@ function setTumblrRelatedImage(el) {
       imDiv[eFakeImage] = dummyImg;
     }
 
-    el.setAttribute(eRelatedTo, imDiv[eFakeImage]);
+    el[eRelatedTo] = imDiv[eFakeImage];
     return true;
   }
   const img = par && par.getElementsByTagName("img")[0];
   if (img) {
-    el.setAttribute(eRelatedTo, img);
+    el[eRelatedTo] = img;
     return true;
   }
   return false;
@@ -839,7 +837,7 @@ function handlePinterestHover(el) {
     !el.parentNode.querySelector(".playIndicatorPill.gifType")
   )
     return;
-  el.setAttribute(eHandledPinterest, true);
+  el[eHandledPinterest] = true;
   const img = el.parentNode.getElementsByTagName("img")[0];
   img.addEventListener("load", event => {
     if (!event.isTrusted) return;
@@ -929,7 +927,7 @@ function updateHoverListeners() {
 
 function markAnimated(img) {
   if (img[eCheckedAnimation]) return;
-  img.setAttribute(eCheckedAnimation, true);
+  img[eCheckedAnimation] = true;
 
   if (img[eAwaitingPlay]) setAnimationState(img, "normal");
   else if (WantedAnimationBehavior !== AnimationBehavior)
@@ -943,7 +941,7 @@ function markAnimated(img) {
 function handleLoad(el) {
   const callback = el[eOnLoad];
   if (callback) {
-    el.setAttribut(eOnLoad, null);
+    el[eOnLoad] = null;
     callback();
     return;
   }
@@ -965,7 +963,7 @@ function handleLoad(el) {
 function handleLoadedMetadata(el) {
   if (isGifv(el)) {
     if (el[eInitedGifv]) return;
-    el.setAttribute(eInitedGifv, true);
+    el[eInitedGifv] = true;
     if (Prefs.defaultPaused) setAnimationState(el, "none");
     updateIndicator(el);
   }
@@ -977,7 +975,6 @@ function notifyAnimated(url) {
   console.info("content-script: found animated image", url);
   AnimatedMap.set(hash(url), 1);
   SeenAnyAnimated = true;
-
   document.getElementsByTagName("img").forEach(img => {
     if (img.src === url) markAnimated(img);
   });
@@ -987,6 +984,7 @@ function checkAnimated(img) {
   const url = img.src;
   const key = hash(url);
   const v = AnimatedMap.get(key);
+
   if (v === 1) {
     markAnimated(img);
   } else if (v !== 2) {
@@ -1052,7 +1050,6 @@ function init() {
   settingsPromise.then(() => {
     browser.storage.onChanged.addListener((changes, area) => {
       if (area !== "local") return;
-
       changes.forEach(pref => {
         if (pref in defaultPrefs) {
           const val = changes[pref].newValue;
