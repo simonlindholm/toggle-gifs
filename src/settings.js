@@ -109,7 +109,7 @@ Promise.all([loadPromise, settingsPromise, animationBehaviorPromise])
     // Special: pause-by-default uses the global animation behavior setting
     const pauseEl = document.getElementById("pause-by-default");
     pauseEl.checked = behavior === "none";
-    pauseEl.onchange = () => {
+    pauseEl.onchange = function onchange() {
       const value = this.checked ? "none" : "normal";
       browser.browserSettings.imageAnimationBehavior
         .set({ value })
@@ -124,14 +124,12 @@ Promise.all([loadPromise, settingsPromise, animationBehaviorPromise])
     };
 
     // Radio buttons, currently just with int values
-    ["hoverPauseWhen"].forEach(pref => {
-      const els = document.getElementsByName(pref);
-      const val = Prefs[pref];
-
-      els.forEach(el => {
-        el.setAttribute("checked", el.value === val);
-        el.addEventListener("change", handleRadioChange, false);
-      });
+    const pref = "hoverPauseWhen";
+    const els = document.getElementsByName(pref);
+    const val = Prefs[pref];
+    els.forEach(el => {
+      el.addEventListener("change", handleRadioChange, false);
+      el.checked = el.value === val;
     });
 
     // All other kinds of prefs
@@ -139,19 +137,18 @@ Promise.all([loadPromise, settingsPromise, animationBehaviorPromise])
       const name = el.getAttribute("data-pref");
       const type = el.getAttribute("data-type");
       const pr = Prefs[name];
-
       if (type === "shortcut") {
         if (typeof pr !== "string") throw new Error("must be a string pref");
         el.addEventListener("keydown", handleShortcutKeyDown, false);
-        el.setAttribute("value", pr);
+        el.value = pr;
       } else if (type === "boolint") {
         if (typeof pr !== "number") throw new Error("must be an int pref");
         el.addEventListener("change", handleBoolIntChange, false);
-        el.setAttribute("checked", pr !== 0);
+        el.checked = pr !== 0;
       } else if (el.type === "checkbox") {
         if (typeof pr !== "boolean") throw new Error("must be a bool pref");
         el.addEventListener("change", handleBoolChange, false);
-        el.setAttribute("checked", pr);
+        el.checked = pr;
       } else {
         throw new Error(`unrecognized ${name}`);
       }

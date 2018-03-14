@@ -8,6 +8,7 @@
   "rules": {
     "no-console": ["error", { "allow": ["info", "warn", "error"] }],
     "no-bitwise": 0,
-    "no-plusplus": ["error", { "allowForLoopAfterthoughts": true }]
+    "no-plusplus": ["error", { "allowForLoopAfterthoughts": true }],
+    "no-param-reassign": ["error", { "props": false }]
   }
 }
