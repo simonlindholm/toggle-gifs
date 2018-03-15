@@ -11,5 +11,7 @@ Requirement on OS level: `yarn` - https://yarnpkg.com/
 + `install`     - install all packages
 + `prettier`    - run prettier on all *.js files
 + `eslint`      - run eslint on all *.js files with `--fix` option
++ `test`        - run tests once
++ `tdd`         - run tests and watch for file changes
 + `lint`        - run `web-ext lint` in ./extension
 + `start`       - run development environment
