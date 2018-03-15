@@ -11,10 +11,11 @@
     "eslint": "eslint --ignore-path .gitignore --fix **/*.js",
     "test": "jest",
     "tdd": "yarn test --watch",
-    "dev": "webpack --watch --mode development",
     "extension": "web-ext -s ./extension",
+    "dev:web": "webpack --watch --mode development",
+    "dev:ext": "yarn extension run --url ./example/gif.html",
     "lint": "yarn extension lint",
-    "start": "yarn dev & yarn extension run --url ./example/gif.html"
+    "start": "npm-run-all -p dev:*"
   },
   "browserslist": [
     "Firefox >= 57"
@@ -34,6 +35,7 @@
     "eslint-plugin-prettier": "^2.6.0",
     "eslint-plugin-react": "^7.7.0",
     "jest": "^22.4.2",
+    "npm-run-all": "^4.1.2",
     "prettier": "^1.11.1",
     "web-ext": "^2.4.0",
     "webpack": "^4.1.1",

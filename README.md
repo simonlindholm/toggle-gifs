@@ -14,4 +14,6 @@ Requirement on OS level: `yarn` - https://yarnpkg.com/
 + `test`        - run tests once
 + `tdd`         - run tests and watch for file changes
 + `lint`        - run `web-ext lint` in ./extension
-+ `start`       - run development environment
++ `dev:web`     - run webpack in development mode and watch for file changes
++ `dev:ext`     - run web-ext with `./example/gif.html` test page
++ `start`       - run development environment (`dev:web` + `dev:ext`)
