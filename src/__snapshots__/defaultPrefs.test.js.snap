@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`defaultPrefs 1`] = `
+exports[`defaultPrefs should match snaptshot 1`] = `
 Object {
   "hoverPauseWhen": 1,
   "hoverPlayOnLoad": false,

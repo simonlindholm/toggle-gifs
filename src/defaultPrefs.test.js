@@ -1,5 +1,5 @@
 import defaultPrefs from "./defaultPrefs";
 
-test("defaultPrefs", () => {
+test("defaultPrefs should match snaptshot", () => {
   expect(defaultPrefs).toMatchSnapshot();
 });
