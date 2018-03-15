@@ -1,10 +1,12 @@
 {
-  "extends": ["airbnb", "prettier"],
+  "extends": ["airbnb", "prettier", "plugin:jest/recommended"],
+  "parser": "babel-eslint",
   "env": {
     "browser": 1,
-    "webextensions": 1
+    "webextensions": 1,
+    "jest": 1
   },
-  "plugins": ["prettier", "json"],
+  "plugins": ["prettier", "jest", "json"],
   "rules": {
     "no-console": ["error", { "allow": ["info", "warn", "error"] }],
     "no-bitwise": 0,
