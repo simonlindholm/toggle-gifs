@@ -13,7 +13,7 @@
     "tdd": "yarn test --watch",
     "extension": "web-ext -s ./extension",
     "dev:web": "webpack --watch --mode development",
-    "dev:ext": "yarn extension run --url ./example/gif.html",
+    "dev:ext": "yarn extension run --pref=javascript.options.strict=false --url ./example/gif.html",
     "lint": "yarn extension lint",
     "start": "npm-run-all -p dev:*"
   },
