@@ -46,7 +46,6 @@ const AnimatedUrlCache = {
     }
   },
 
-  // TODO: @simonlindholm are you sure this code needs to be so complicated?
   evict(map, keep) {
     const del = map.length - keep;
     const ar = [];
