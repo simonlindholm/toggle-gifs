@@ -48,13 +48,16 @@ const AnimatedUrlCache = {
 
   evict(map, keep) {
     const del = map.length - keep;
-    const ar = [];
+    let ar = [];
     let ind = 0;
 
-    map.keys().forEach(key => {
+    /* eslint-disable no-restricted-syntax */
+    for (const key of map.keys()) {
       ind += 1;
-      if (ind <= del) ar.push(key);
-    });
+      if (ind > del) break;
+      ar = [...ar, key];
+    }
+    /* eslint-enable no-restricted-syntax */
 
     ar.forEach(key => map.delete(key));
   },
