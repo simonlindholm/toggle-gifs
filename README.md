@@ -17,3 +17,10 @@ Requirement on OS level: `yarn` - https://yarnpkg.com/
 + `dev:web`     - run webpack in development mode and watch for file changes
 + `dev:ext`     - run web-ext with `./example/gif.html` test page
 + `start`       - run development environment (`dev:web` + `dev:ext`)
+
+### First start
+*Before* you can use the addon in development, run `yarn install`.
+
+### Problems
++ cache: after auto-reload, maybe you need to press `[ctrl]+[shift]+[r]` to make
+  new new image requests.
