@@ -536,7 +536,7 @@ function resetImagesInWindow() {
   // But it's a bit complex.)
   let any = false;
   ["video", "img"].forEach(tagName => {
-    document.getElementsByTagName(tagName).forEach(el => {
+    [...document.getElementsByTagName(tagName)].forEach(el => {
       if (isAnimatedImage(el)) {
         resetImageAnimation(el);
         any = true;
@@ -563,7 +563,7 @@ function toggleImagesInWindow() {
 
   let any = false;
   ["video", "img"].forEach(tagName => {
-    document.getElementsByTagName(tagName).forEach(el => {
+    [...document.getElementsByTagName(tagName)].forEach(el => {
       if (isAnimatedImage(el)) {
         setAnimationState(el, WantedAnimationBehavior);
         any = true;
@@ -622,7 +622,7 @@ function updateAllIndicators(prev, cur) {
     AnimationIndicators = new Set();
   } else if (prev === 0 && cur > 0) {
     ["video", "img"].forEach(tagName => {
-      document.getElementsByTagName(tagName).forEach(el => {
+      [...document.getElementsByTagName(tagName)].forEach(el => {
         if (isAnimatedImage(el)) {
           updateIndicator(el);
         }
@@ -975,7 +975,7 @@ function notifyAnimated(url) {
   console.info("content-script: found animated image", url);
   AnimatedMap.set(hash(url), 1);
   SeenAnyAnimated = true;
-  document.getElementsByTagName("img").forEach(img => {
+  [...document.getElementsByTagName("img")].forEach(img => {
     if (img.src === url) markAnimated(img);
   });
 }
