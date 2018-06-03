@@ -476,11 +476,12 @@ function isGif(req) {
     return true;
   }
 
-  req.responseHeaders.forEach(
-    header =>
-      header.name.toLowerCase() === "content-type" &&
-      header.value === "image/gif"
-  );
+  /* eslint-disable no-restricted-syntax */
+  for (const header of req.responseHeaders) {
+    if (header.name.toLowerCase() === "content-type")
+      return header.value === "image/gif";
+  }
+  /* eslint-enable no-restricted-syntax */
 
   return false;
 }
