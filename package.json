@@ -15,6 +15,7 @@
     "dev:web": "webpack --watch --mode development",
     "dev:ext": "yarn extension run --pref=javascript.options.strict=false --url ./example/gif.html",
     "lint": "yarn extension lint",
+    "build": "echo \"build XPI, later\"",
     "start": "npm-run-all -p dev:*"
   },
   "browserslist": [
