@@ -5,7 +5,8 @@
 	"version": "2.0",
 	"applications": {
 		"gecko": {
-			"strict_min_version": "57"
+			"id": "giftoggle@simonsoftware.se",
+			"strict_min_version": "57.0"
 		}
 	},
 
