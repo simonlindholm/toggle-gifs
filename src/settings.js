@@ -135,7 +135,7 @@ Promise.all([loadPromise, settingsPromise, animationBehaviorPromise])
         });
 
         // All other kinds of prefs
-        document.querySelectorAll("[data-pref]").forEach(el => {
+        for (const el of document.querySelectorAll("[data-pref]")) {
             const name = el.getAttribute("data-pref");
             const type = el.getAttribute("data-type");
             const pr = Prefs[name];
@@ -157,7 +157,7 @@ Promise.all([loadPromise, settingsPromise, animationBehaviorPromise])
             } else {
                 throw new Error(`unrecognized ${name}`);
             }
-        });
+        }
 
         document.body.hidden = false;
     });

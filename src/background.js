@@ -101,7 +101,7 @@ const TemporaryQueue = {
 
     work() {
         if (this.state === "transition") return;
-        this.queues[this.state].forEach(item => {
+        for (const item of this.queues[this.state]) {
             const { key } = item;
             const timeout = setTimeout(() => {
                 // Revert the change after a timeout, e.g. if the tab gets
@@ -117,7 +117,7 @@ const TemporaryQueue = {
                 // Not our or the caller's fault if this throws an exception!
                 console.error(ex);
             }
-        });
+        }
         this.queues[this.state] = [];
 
         if (

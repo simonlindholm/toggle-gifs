@@ -190,7 +190,7 @@ function noop() {
 }
 
 function forEachAnimationIndicator(func) {
-    AnimationIndicators.forEach(el => {
+    for (const el of AnimationIndicators) {
         try {
             func(el);
         } catch (ex) {
@@ -198,7 +198,7 @@ function forEachAnimationIndicator(func) {
             AnimationIndicators.delete(el);
             console.error(ex);
         }
-    });
+    }
 }
 
 function inViewport(element) {
@@ -541,14 +541,14 @@ function resetImagesInWindow() {
     // non-<img>s down from the parent, and then doing 'new Image().src = url'.
     // But it's a bit complex.)
     let any = false;
-    ["video", "img"].forEach(tagName => {
-        [...document.getElementsByTagName(tagName)].forEach(el => {
+    for (const tagName of ["video", "img"]) {
+        for (const el of document.getElementsByTagName(tagName)) {
             if (isAnimatedImage(el)) {
                 resetImageAnimation(el);
                 any = true;
             }
-        });
-    });
+        }
+    }
     return any;
 }
 
@@ -568,14 +568,14 @@ function toggleImagesInWindow() {
     WantedAnimationBehavior = curState === "none" ? "normal" : "none";
 
     let any = false;
-    ["video", "img"].forEach(tagName => {
-        [...document.getElementsByTagName(tagName)].forEach(el => {
+    for (const tagName of ["video", "img"]) {
+        for (const el of document.getElementsByTagName(tagName)) {
             if (isAnimatedImage(el)) {
                 setAnimationState(el, WantedAnimationBehavior);
                 any = true;
             }
-        });
-    });
+        }
+    }
 
     if (CurrentHover) CurrentHover.refresh();
     forEachAnimationIndicator(updateIndicator);
@@ -627,13 +627,13 @@ function updateAllIndicators(prev, cur) {
         });
         AnimationIndicators = new Set();
     } else if (prev === 0 && cur > 0) {
-        ["video", "img"].forEach(tagName => {
-            [...document.getElementsByTagName(tagName)].forEach(el => {
+        for (const tagName of ["video", "img"]) {
+            for (const el of document.getElementsByTagName(tagName)) {
                 if (isAnimatedImage(el)) {
                     updateIndicator(el);
                 }
-            });
-        });
+            }
+        }
     }
 }
 
@@ -982,9 +982,9 @@ function notifyAnimated(url) {
     console.info("content-script: found animated image", url);
     AnimatedMap.set(hash(url), 1);
     SeenAnyAnimated = true;
-    [...document.getElementsByTagName("img")].forEach(img => {
+    for (const img of document.getElementsByTagName("img")) {
         if (img.src === url) markAnimated(img);
-    });
+    }
 }
 
 function checkAnimated(img) {
@@ -1057,7 +1057,7 @@ function init() {
     settingsPromise.then(() => {
         browser.storage.onChanged.addListener((changes, area) => {
             if (area !== "local") return;
-            changes.forEach(pref => {
+            for (const pref of changes) {
                 if (pref in defaultPrefs) {
                     const val = changes[pref].newValue;
                     if (inited) {
@@ -1066,7 +1066,7 @@ function init() {
                         Prefs[pref] = val;
                     }
                 }
-            });
+            }
         });
     });
 
@@ -1107,13 +1107,13 @@ function init() {
             }
         });
 
-        loadQueue.forEach(callback => {
+        for (const callback of loadQueue) {
             try {
                 callback();
             } catch (e) {
                 console.error(e);
             }
-        });
+        }
         loadQueue = null;
     });
 }
