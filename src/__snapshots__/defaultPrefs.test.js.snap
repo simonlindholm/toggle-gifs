@@ -1,0 +1,14 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`defaultPrefs should match snaptshot 1`] = `
+Object {
+  "hoverPauseWhen": 1,
+  "hoverPlayOnLoad": false,
+  "indicatorStyle": 0,
+  "playOnHover": false,
+  "shortcutReset": "",
+  "shortcutToggle": "",
+  "showOverlays": true,
+  "supportGifv": true,
+}
+`;

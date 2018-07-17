@@ -1,0 +1,43 @@
+{
+  "name": "toggle-gifs",
+  "version": "2.0.0",
+  "description": "Start/stop GIF animations through a keyboard shortcut or by clicking them. You can also restart animations from the beginning, or disable animations by default.",
+  "main": "index.js",
+  "repository": "git@github.com:simonlindholm/toggle-gifs.git",
+  "author": "Simon Lindholm",
+  "license": "CC0-1.0",
+  "scripts": {
+    "prettier": "prettier --write **/*.{js,json}",
+    "eslint": "eslint --fix src/**/*.js",
+    "test": "jest",
+    "tdd": "yarn test --watch",
+    "extension": "web-ext -s ./extension",
+    "dev:web": "webpack --watch --mode development",
+    "dev:ext": "yarn extension run --pref=javascript.options.strict=false --url ./example/gif.html",
+    "lint": "yarn extension lint",
+    "build": "echo \"build XPI, later\"",
+    "start": "npm-run-all -p dev:*"
+  },
+  "browserslist": [
+    "Firefox >= 57"
+  ],
+  "dependencies": {
+    "babel-core": "^6.26.0",
+    "babel-eslint": "^8.2.2",
+    "babel-loader": "^7.1.4",
+    "babel-preset-env": "^1.6.1",
+    "eslint": "^5.1.0",
+    "eslint-config-airbnb-base": "^13.0.0",
+    "eslint-config-prettier": "^2.9.0",
+    "eslint-plugin-import": "^2.9.0",
+    "eslint-plugin-jest": "^21.15.0",
+    "eslint-plugin-json": "^1.2.0",
+    "eslint-plugin-prettier": "^2.6.0",
+    "jest": "^23.1.0",
+    "npm-run-all": "^4.1.2",
+    "prettier": "^1.11.1",
+    "web-ext": "^2.4.0",
+    "webpack": "^4.1.1",
+    "webpack-cli": "^3.0.1"
+  }
+}
